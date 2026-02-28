@@ -7,21 +7,24 @@ Requires: pip install pillow
 from PIL import Image
 import os
 
+
 def create_directory(path):
     os.makedirs(path, exist_ok=True)
 
+
 def save_sprite(filename, pixel_data, size=32):
     """Create a sprite from a 2D array of colors."""
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     pixels = img.load()
-    
+
     for y, row in enumerate(pixel_data):
         for x, color in enumerate(row):
             if color is not None:
                 pixels[x, y] = color
-    
+
     img.save(filename)
     print(f"✓ Created {filename}")
+
 
 # Colors
 TRANSPARENT = None
@@ -58,10 +61,16 @@ warrior = [
     [TRANSPARENT] * 3 + [RED] * 6 + [TRANSPARENT] * 23,
     [TRANSPARENT] * 3 + [RED, RED, DARK_RED, RED, RED, RED] + [TRANSPARENT] * 23,
     [TRANSPARENT] * 2 + [RED] * 8 + [TRANSPARENT] * 22,
-    [TRANSPARENT] * 2 + [DARK_RED, RED, RED, RED, RED, RED, RED, DARK_RED] + [TRANSPARENT] * 22,
+    [TRANSPARENT] * 2
+    + [DARK_RED, RED, RED, RED, RED, RED, RED, DARK_RED]
+    + [TRANSPARENT] * 22,
     [TRANSPARENT] * 2 + [RED] * 8 + [TRANSPARENT] * 22,
     [TRANSPARENT] * 3 + [RED] * 6 + [TRANSPARENT] * 23,
-    [TRANSPARENT] * 2 + [BROWN, BROWN] + [RED] * 4 + [BROWN, BROWN] + [TRANSPARENT] * 22,
+    [TRANSPARENT] * 2
+    + [BROWN, BROWN]
+    + [RED] * 4
+    + [BROWN, BROWN]
+    + [TRANSPARENT] * 22,
     [TRANSPARENT] * 2 + [BROWN] * 8 + [TRANSPARENT] * 22,
     [TRANSPARENT] * 3 + [BROWN] * 6 + [TRANSPARENT] * 23,
     [TRANSPARENT] * 4 + [BROWN] * 4 + [TRANSPARENT] * 24,
@@ -78,9 +87,13 @@ mage = [
     [TRANSPARENT] * 4 + [SKIN] * 4 + [TRANSPARENT] * 24,
     [TRANSPARENT] * 4 + [SKIN, DARK_SKIN, DARK_SKIN, SKIN] + [TRANSPARENT] * 24,
     [TRANSPARENT] * 3 + [BLUE] * 6 + [TRANSPARENT] * 23,
-    [TRANSPARENT] * 3 + [BLUE, DARK_BLUE, BLUE, BLUE, DARK_BLUE, BLUE] + [TRANSPARENT] * 23,
+    [TRANSPARENT] * 3
+    + [BLUE, DARK_BLUE, BLUE, BLUE, DARK_BLUE, BLUE]
+    + [TRANSPARENT] * 23,
     [TRANSPARENT] * 2 + [BLUE] * 8 + [TRANSPARENT] * 22,
-    [TRANSPARENT] * 2 + [DARK_BLUE, BLUE, BLUE, BLUE, BLUE, BLUE, BLUE, DARK_BLUE] + [TRANSPARENT] * 22,
+    [TRANSPARENT] * 2
+    + [DARK_BLUE, BLUE, BLUE, BLUE, BLUE, BLUE, BLUE, DARK_BLUE]
+    + [TRANSPARENT] * 22,
     [TRANSPARENT] * 2 + [BLUE] * 8 + [TRANSPARENT] * 22,
     [TRANSPARENT] * 3 + [BLUE] * 6 + [TRANSPARENT] * 23,
     [TRANSPARENT] * 2 + [BLUE] * 8 + [TRANSPARENT] * 22,
@@ -100,9 +113,13 @@ rogue = [
     [TRANSPARENT] * 4 + [SKIN] * 4 + [TRANSPARENT] * 24,
     [TRANSPARENT] * 4 + [SKIN, DARK_SKIN, DARK_SKIN, SKIN] + [TRANSPARENT] * 24,
     [TRANSPARENT] * 3 + [DARK_GREEN] * 6 + [TRANSPARENT] * 23,
-    [TRANSPARENT] * 3 + [DARK_GREEN, GREEN, GREEN, GREEN, GREEN, DARK_GREEN] + [TRANSPARENT] * 23,
+    [TRANSPARENT] * 3
+    + [DARK_GREEN, GREEN, GREEN, GREEN, GREEN, DARK_GREEN]
+    + [TRANSPARENT] * 23,
     [TRANSPARENT] * 2 + [DARK_GREEN] * 8 + [TRANSPARENT] * 22,
-    [TRANSPARENT] * 2 + [GREEN, DARK_GREEN, DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN, GREEN] + [TRANSPARENT] * 22,
+    [TRANSPARENT] * 2
+    + [GREEN, DARK_GREEN, DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN, GREEN]
+    + [TRANSPARENT] * 22,
     [TRANSPARENT] * 2 + [DARK_GREEN] * 8 + [TRANSPARENT] * 22,
     [TRANSPARENT] * 3 + [DARK_GREEN] * 6 + [TRANSPARENT] * 23,
     [TRANSPARENT] * 2 + [BROWN] * 8 + [TRANSPARENT] * 22,
@@ -124,7 +141,9 @@ paladin = [
     [TRANSPARENT] * 3 + [GOLD] * 6 + [TRANSPARENT] * 23,
     [TRANSPARENT] * 3 + [GOLD, WHITE, WHITE, WHITE, WHITE, GOLD] + [TRANSPARENT] * 23,
     [TRANSPARENT] * 2 + [GOLD] * 8 + [TRANSPARENT] * 22,
-    [TRANSPARENT] * 2 + [WHITE, GOLD, GOLD, GOLD, GOLD, GOLD, GOLD, WHITE] + [TRANSPARENT] * 22,
+    [TRANSPARENT] * 2
+    + [WHITE, GOLD, GOLD, GOLD, GOLD, GOLD, GOLD, WHITE]
+    + [TRANSPARENT] * 22,
     [TRANSPARENT] * 2 + [GOLD] * 8 + [TRANSPARENT] * 22,
     [TRANSPARENT] * 3 + [GOLD] * 6 + [TRANSPARENT] * 23,
     [TRANSPARENT] * 2 + [WHITE] * 8 + [TRANSPARENT] * 22,
@@ -144,11 +163,27 @@ goblin = [
     [TRANSPARENT] * 32,
     [TRANSPARENT] * 6 + [DARK_GREEN] * 3 + [TRANSPARENT] * 23,
     [TRANSPARENT] * 5 + [DARK_GREEN] * 5 + [TRANSPARENT] * 22,
-    [TRANSPARENT] * 5 + [DARK_GREEN, GREEN, GREEN, GREEN, DARK_GREEN] + [TRANSPARENT] * 22,
+    [TRANSPARENT] * 5
+    + [DARK_GREEN, GREEN, GREEN, GREEN, DARK_GREEN]
+    + [TRANSPARENT] * 22,
     [TRANSPARENT] * 4 + [DARK_GREEN] * 7 + [TRANSPARENT] * 21,
-    [TRANSPARENT] * 4 + [DARK_GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, DARK_GREEN] + [TRANSPARENT] * 21,
+    [TRANSPARENT] * 4
+    + [DARK_GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, DARK_GREEN]
+    + [TRANSPARENT] * 21,
     [TRANSPARENT] * 3 + [DARK_GREEN] * 9 + [TRANSPARENT] * 20,
-    [TRANSPARENT] * 3 + [DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN] + [TRANSPARENT] * 20,
+    [TRANSPARENT] * 3
+    + [
+        DARK_GREEN,
+        GREEN,
+        GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        GREEN,
+        GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+    ]
+    + [TRANSPARENT] * 20,
     [TRANSPARENT] * 3 + [DARK_GREEN] * 9 + [TRANSPARENT] * 20,
     [TRANSPARENT] * 4 + [DARK_GREEN] * 7 + [TRANSPARENT] * 21,
     [TRANSPARENT] * 4 + [BROWN] * 7 + [TRANSPARENT] * 21,
@@ -165,9 +200,13 @@ orc = [
     [TRANSPARENT] * 4 + [DARK_RED] * 6 + [TRANSPARENT] * 22,
     [TRANSPARENT] * 4 + [DARK_RED, RED, RED, RED, RED, DARK_RED] + [TRANSPARENT] * 22,
     [TRANSPARENT] * 3 + [DARK_RED] * 8 + [TRANSPARENT] * 21,
-    [TRANSPARENT] * 3 + [DARK_RED, RED, RED, RED, RED, RED, RED, DARK_RED] + [TRANSPARENT] * 21,
+    [TRANSPARENT] * 3
+    + [DARK_RED, RED, RED, RED, RED, RED, RED, DARK_RED]
+    + [TRANSPARENT] * 21,
     [TRANSPARENT] * 2 + [DARK_RED] * 10 + [TRANSPARENT] * 20,
-    [TRANSPARENT] * 2 + [DARK_RED, RED, RED, RED, RED, RED, RED, RED, RED, DARK_RED] + [TRANSPARENT] * 20,
+    [TRANSPARENT] * 2
+    + [DARK_RED, RED, RED, RED, RED, RED, RED, RED, RED, DARK_RED]
+    + [TRANSPARENT] * 20,
     [TRANSPARENT] * 2 + [DARK_RED] * 10 + [TRANSPARENT] * 20,
     [TRANSPARENT] * 3 + [DARK_RED] * 8 + [TRANSPARENT] * 21,
     [TRANSPARENT] * 2 + [BROWN] * 10 + [TRANSPARENT] * 20,
@@ -185,9 +224,13 @@ skeleton = [
     [TRANSPARENT] * 4 + [WHITE] * 6 + [TRANSPARENT] * 22,
     [TRANSPARENT] * 4 + [WHITE, BLACK, BLACK, BLACK, BLACK, WHITE] + [TRANSPARENT] * 22,
     [TRANSPARENT] * 3 + [WHITE] * 8 + [TRANSPARENT] * 21,
-    [TRANSPARENT] * 3 + [WHITE, WHITE, BLACK, WHITE, WHITE, BLACK, WHITE, WHITE] + [TRANSPARENT] * 21,
+    [TRANSPARENT] * 3
+    + [WHITE, WHITE, BLACK, WHITE, WHITE, BLACK, WHITE, WHITE]
+    + [TRANSPARENT] * 21,
     [TRANSPARENT] * 2 + [WHITE] * 10 + [TRANSPARENT] * 20,
-    [TRANSPARENT] * 2 + [WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE] + [TRANSPARENT] * 20,
+    [TRANSPARENT] * 2
+    + [WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE, WHITE]
+    + [TRANSPARENT] * 20,
     [TRANSPARENT] * 2 + [WHITE] * 10 + [TRANSPARENT] * 20,
     [TRANSPARENT] * 3 + [WHITE] * 8 + [TRANSPARENT] * 21,
     [TRANSPARENT] * 2 + [GRAY] * 10 + [TRANSPARENT] * 20,
@@ -203,11 +246,47 @@ spider = [
     [TRANSPARENT] * 32,
     [TRANSPARENT] * 10 + [BLACK] * 4 + [TRANSPARENT] * 18,
     [TRANSPARENT] * 8 + [BLACK] * 8 + [TRANSPARENT] * 16,
-    [TRANSPARENT] * 8 + [BLACK, RED, RED, BLACK, BLACK, RED, RED, BLACK] + [TRANSPARENT] * 16,
+    [TRANSPARENT] * 8
+    + [BLACK, RED, RED, BLACK, BLACK, RED, RED, BLACK]
+    + [TRANSPARENT] * 16,
     [TRANSPARENT] * 6 + [BLACK] * 12 + [TRANSPARENT] * 14,
-    [TRANSPARENT] * 6 + [BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK] + [TRANSPARENT] * 14,
+    [TRANSPARENT] * 6
+    + [
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+    ]
+    + [TRANSPARENT] * 14,
     [TRANSPARENT] * 4 + [BLACK] * 16 + [TRANSPARENT] * 12,
-    [TRANSPARENT] * 4 + [BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK] + [TRANSPARENT] * 12,
+    [TRANSPARENT] * 4
+    + [
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+        BLACK,
+    ]
+    + [TRANSPARENT] * 12,
     [TRANSPARENT] * 3 + [BLACK] * 18 + [TRANSPARENT] * 11,
     [TRANSPARENT] * 2 + [BLACK] * 20 + [TRANSPARENT] * 10,
     [TRANSPARENT] * 2 + [BLACK] * 20 + [TRANSPARENT] * 10,
@@ -219,14 +298,35 @@ save_sprite(f"{assets_dir}/spider.png", spider)
 
 # SIMPLE TILESET - Grass, dirt, stone, wood, water, sand, gravel, rocks, building tiles
 grass_tile = [
-    [DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN] * 4,
+    [
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+    ]
+    * 4,
     [DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN, GREEN, DARK_GREEN, GREEN] * 4,
     [DARK_GREEN, GREEN, DARK_GREEN, GREEN, GREEN, DARK_GREEN, GREEN, DARK_GREEN] * 4,
-    [DARK_GREEN, DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, GREEN] * 4,
+    [DARK_GREEN, DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, GREEN]
+    * 4,
     [GREEN, DARK_GREEN, GREEN, DARK_GREEN, GREEN, DARK_GREEN, GREEN, DARK_GREEN] * 4,
     [GREEN, GREEN, DARK_GREEN, GREEN, DARK_GREEN, GREEN, DARK_GREEN, GREEN] * 4,
     [DARK_GREEN, GREEN, GREEN, DARK_GREEN, GREEN, GREEN, DARK_GREEN, DARK_GREEN] * 4,
-    [DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN, DARK_GREEN] * 4,
+    [
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+        DARK_GREEN,
+    ]
+    * 4,
 ]
 save_sprite(f"{assets_dir}/grass.png", grass_tile, size=32)
 
@@ -352,4 +452,6 @@ print("\n✅ All assets created in ./assets/")
 print("\nGenerated sprites:")
 print("  Classes: warrior.png, mage.png, rogue.png, paladin.png")
 print("  Enemies: goblin.png, orc.png, skeleton.png, spider.png")
-print("  Tiles: grass.png, dirt.png, stone.png, wood.png, water.png, sand.png, gravel.png, rock.png, wall.png, door.png")
+print(
+    "  Tiles: grass.png, dirt.png, stone.png, wood.png, water.png, sand.png, gravel.png, rock.png, wall.png, door.png"
+)
