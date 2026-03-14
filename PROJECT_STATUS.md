@@ -38,12 +38,27 @@ Over numerous iterations, collision logic was progressively refined:
 
 The current build uses the stable movement code that allowed dungeon navigation before experimentation.
 
+## 🔧 Bug Fixes Applied (March 2026)
+
+The following bugs were identified and fixed in `src/main.rs`:
+
+1. **Stair transition loops infinitely** – `update_on_stairs` would re-trigger on the very next frame before the player moved off the stair tile, bouncing them back and forth between states. Fixed by adding a `TransitionCooldown` resource that skips the stair check for one frame after each transition.
+
+2. **Wrong tile coordinate in `update_on_stairs`** – Used a bare `as usize` cast (truncation toward zero) instead of `.floor()` when converting world coordinates to tile indices, causing stairs near the lower/left edges to never be detected. Fixed to match the `.floor()` logic already used in `player_movement`.
+
+3. **Player sprite shrinks after state transition** – `Transform::from_xyz(x, y, 1.0)` was used to teleport the player, which replaced the transform without preserving `SCALE`. After a transition the player rendered at 1× size. Fixed by chaining `.with_scale(Vec3::splat(SCALE))`.
+
+4. **Stale orphaned doc-comment** – A `/// return true if an AABB…` doc-comment left over from the removed AABB collision helper was deleted to reduce noise.
+
+
 ## 📌 Current Known Issues & Warnings
 
 - Some unused enum variants and struct fields trigger compiler warnings (`Sand`, `Gravel`, `Tile.tile_type`).
 - Movement still uses a single tile test; sliding along walls isn't implemented.
 - No monster or combat logic present.
 - Player sprite may clip slightly due to scale/anchor mismatch; visual alignment is not perfected.
+- ~~Stair transition loops / player bounces~~ ✅ Fixed
+- ~~Player shrinks after state transition~~ ✅ Fixed
 
 ## 🔮 Next Phases & Steps
 
@@ -77,7 +92,20 @@ The current build uses the stable movement code that allowed dungeon navigation 
 - Create a `README.md` with build/run instructions and development notes (this document can serve as a starting point).
 - Set up version control commits for milestones or use Git tags.
 
+### Phase 5 – Architecture & Developer Experience
+1. **Split `main.rs` into modules** (`player.rs`, `map.rs`, `systems.rs`, `state.rs`) — the file is now long enough that navigation is painful.
+2. **Introduce Bevy `States`** — replace the manual `GameState` enum in `GameData` with Bevy's first-class `States` API so systems can be scheduled per-state, removing the need for runtime `match game_data.state` guards everywhere.
+3. **Replace `TransitionCooldown` with Bevy `OnExit`/`OnEnter` schedules** — once `States` is adopted, the cooldown hack can be removed; tile despawn/spawn naturally belongs in `OnExit<GameState::Hub>` and `OnEnter<GameState::Dungeon>`.
+4. **Add automated tests** for dungeon generation (room count, connectivity, stair placement) and tile-coordinate conversion helpers.
+5. **Seed-based dungeon generation** — store the RNG seed so dungeons are reproducible for debugging and future save/load support.
+
+### Phase 6 – Enemies & Combat (Next Gameplay Milestone)
+1. **Enemy component and spawning** — spawn goblins/orcs/skeletons in dungeon rooms using the existing sprite assets already present in `assets/`.
+2. **Turn-based or real-time movement AI** — simple random-walk or player-chase behaviour.
+3. **Melee combat** — attack when adjacent; health component on player and enemies; basic damage numbers.
+4. **Death and respawn** — despawn enemies on death; track kill count in HUD.
+5. **Multiple character classes** — the mage, paladin, and rogue sprites are already in assets; let the player choose at startup.
+
+
 ## 🎯 Summary
 The project is at a playable prototype stage with tile‑based movement and procedural level switching. The most recent focus on pixel-perfect collision led to breakage, so we've rolled back to a known-good state. Going forward, splitting the codebase and planning feature phases will make future experimentation safer and more controlled.
-
-Feel free to use this markdown as a living project plan; update it as features get added or priorities shift. Happy hacking! 🛠️

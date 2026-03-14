@@ -1,1 +1,16 @@
+# Rust / Cargo
 /target
+Cargo.lock
+
+# Generated assets — regenerate with: python generate_assets.py
+# Remove this line if you want to commit the PNGs directly
+# assets/*.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
