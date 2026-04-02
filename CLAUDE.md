@@ -4,7 +4,11 @@ This file gives Claude context about the project so it can assist effectively.
 
 ## Project Overview
 
-RustLike is a top-down roguelike prototype written in Rust using the Bevy 0.11 ECS framework. It features procedural dungeon generation, tile-based maps, smooth AABB player movement, and hub ↔ dungeon state transitions. The codebase lives in a single `src/main.rs` file; splitting into modules is a planned next step.
+RustLike is a top-down roguelike prototype written in Rust using the Bevy 0.11 ECS framework. It features procedural dungeon generation, tile-based maps, smooth AABB player movement, and hub ↔ dungeon state transitions. The codebase is split across four modules in `src/`:
+- `main.rs` — constants, app entry point, `setup` system
+- `map.rs` — `TileKind`, `Tilemap`, map builders, `spawn_map`, `TileMarker`
+- `player.rs` — `Player` component, `player_movement` system
+- `state.rs` — `MapState`, `World`, `StairCooldown`, `stair_transition` system
 
 ## Build & Run
 
@@ -77,7 +81,6 @@ AABB collision with `Anchor::Center` (translation = sprite centre):
 
 ## Known Issues & Caveats
 
-- **Single file**: all game logic is in `src/main.rs`. Splitting into modules (`map.rs`, `player.rs`, `systems.rs`) is the next planned refactor.
 - **Bevy `States` not used**: `MapState` is a plain enum inside the `World` resource. Migrating to Bevy's first-class `States` API would allow per-state system scheduling and cleaner `OnEnter`/`OnExit` hooks.
 - **No enemies or combat**: the enemy sprite assets (goblin, orc, skeleton, spider) exist but are not yet wired into the game.
 - **Stair detection uses player centre only**: a large fast-moving player could theoretically skip over a stair tile. Acceptable at current speed.
@@ -85,7 +88,7 @@ AABB collision with `Anchor::Center` (translation = sprite centre):
 
 ## Roadmap (see also PROJECT_STATUS.md)
 
-1. Split `main.rs` into modules
+1. ~~Split `main.rs` into modules~~ ✅ Done
 2. Adopt Bevy `States` API
 3. Enemy spawning and basic combat
 4. Inventory and item pickups
