@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
 use crate::{TILE, DUNGEON_W, DUNGEON_H};
 
 // ─── tile types ──────────────────────────────────────────────────────────────
@@ -130,14 +131,18 @@ impl Room {
     }
 }
 
-pub fn build_dungeon() -> (Tilemap, Vec2) {
-    let mut m = Tilemap::new(DUNGEON_W, DUNGEON_H, TileKind::Wall);
-    let mut rng = rand::thread_rng();
+/// Build a dungeon deterministically from `seed`.
+/// Pass the same seed to reproduce the exact same layout.
+/// The seed is printed to stdout at startup so you can record it.
+pub fn build_dungeon(seed: u64) -> (Tilemap, Vec2) {
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut m   = Tilemap::new(DUNGEON_W, DUNGEON_H, TileKind::Wall);
     let mut rooms: Vec<Room> = Vec::new();
 
     for _ in 0..40 {
-        let rw = rng.gen_range(5..12);
-        let rh = rng.gen_range(4..9);
+        // Room sizes tuned for the 33×18 dungeon footprint.
+        let rw = rng.gen_range(4..9);
+        let rh = rng.gen_range(3..6);
         let rx = rng.gen_range(1..DUNGEON_W.saturating_sub(rw + 1));
         let ry = rng.gen_range(1..DUNGEON_H.saturating_sub(rh + 1));
         let room = Room { x: rx, y: ry, w: rw, h: rh };
@@ -172,4 +177,189 @@ pub fn build_dungeon() -> (Tilemap, Vec2) {
     };
 
     (m, stair_pos)
+}
+
+// ─── tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TILE;
+
+    // ── Tilemap coordinate helpers ───────────────────────────────────────────
+
+    /// tile_center and world_to_tile must be exact inverses of each other.
+    /// For every tile in a small map, converting to world space and back
+    /// must return the original (col, row).
+    #[test]
+    fn tile_center_and_world_to_tile_are_inverses() {
+        let map = Tilemap::new(33, 18, TileKind::Grass);
+        for row in 0..map.h {
+            for col in 0..map.w {
+                let world = map.tile_center(col, row);
+                let result = map.world_to_tile(world);
+                assert_eq!(
+                    result,
+                    Some((col, row)),
+                    "round-trip failed for ({col},{row}): world={world:?} -> {result:?}"
+                );
+            }
+        }
+    }
+
+    /// Points just inside each edge of a tile must resolve to that tile.
+    #[test]
+    fn world_to_tile_interior_points() {
+        let map = Tilemap::new(10, 10, TileKind::Grass);
+        let col = 5usize;
+        let row = 5usize;
+        let center = map.tile_center(col, row);
+        let inset  = 0.1;
+
+        // All four near-edge interior points should map back to (col, row).
+        let points = [
+            Vec2::new(center.x - TILE / 2.0 + inset, center.y),               // near left edge
+            Vec2::new(center.x + TILE / 2.0 - inset, center.y),               // near right edge
+            Vec2::new(center.x, center.y - TILE / 2.0 + inset),               // near bottom edge
+            Vec2::new(center.x, center.y + TILE / 2.0 - inset),               // near top edge
+        ];
+        for p in points {
+            assert_eq!(map.world_to_tile(p), Some((col, row)), "point {p:?} did not resolve to ({col},{row})");
+        }
+    }
+
+    /// Points outside the map bounds must return None.
+    #[test]
+    fn world_to_tile_out_of_bounds_returns_none() {
+        let map = Tilemap::new(10, 10, TileKind::Grass);
+        // Compute a point well outside the map extents.
+        let far = (map.w as f32) * TILE * 2.0;
+        assert_eq!(map.world_to_tile(Vec2::new( far,  0.0)), None);
+        assert_eq!(map.world_to_tile(Vec2::new(-far,  0.0)), None);
+        assert_eq!(map.world_to_tile(Vec2::new( 0.0,  far)), None);
+        assert_eq!(map.world_to_tile(Vec2::new( 0.0, -far)), None);
+    }
+
+    /// solid_at must return true for out-of-bounds points (treated as walls).
+    #[test]
+    fn solid_at_out_of_bounds_is_true() {
+        let map = Tilemap::new(10, 10, TileKind::Grass);
+        let far = (map.w as f32) * TILE * 2.0;
+        assert!(map.solid_at(Vec2::new(far, 0.0)));
+        assert!(map.solid_at(Vec2::new(0.0, -far)));
+    }
+
+    /// solid_at must correctly distinguish solid from open tiles.
+    #[test]
+    fn solid_at_matches_tile_kind() {
+        let mut map = Tilemap::new(5, 5, TileKind::Grass);
+        map.set(2, 2, TileKind::Wall);
+        let wall_pos  = map.tile_center(2, 2);
+        let grass_pos = map.tile_center(1, 1);
+        assert!(map.solid_at(wall_pos),   "Wall tile should be solid");
+        assert!(!map.solid_at(grass_pos), "Grass tile should not be solid");
+    }
+
+    // ── Dungeon generation ───────────────────────────────────────────────────
+
+    /// A freshly generated dungeon must contain at least one room (Dirt tile).
+    #[test]
+    fn dungeon_contains_at_least_one_room() {
+        let (map, _) = build_dungeon(42);
+        let has_floor = (0..map.h).any(|r| (0..map.w).any(|c| map.get(c, r) == TileKind::Dirt));
+        assert!(has_floor, "Dungeon should contain at least one Dirt (floor) tile");
+    }
+
+    /// The dungeon must contain exactly one stair tile.
+    #[test]
+    fn dungeon_has_exactly_one_stair() {
+        let (map, _) = build_dungeon(42);
+        let stair_count = (0..map.h)
+            .flat_map(|r| (0..map.w).map(move |c| (c, r)))
+            .filter(|&(c, r)| map.get(c, r) == TileKind::Stairs)
+            .count();
+        assert_eq!(stair_count, 1, "Dungeon should have exactly 1 stair tile, found {stair_count}");
+    }
+
+    /// The stair tile must be walkable (not solid).
+    #[test]
+    fn dungeon_stair_is_not_solid() {
+        let (map, stair_world) = build_dungeon(42);
+        assert!(
+            !map.solid_at(stair_world),
+            "Stair world position should not be solid"
+        );
+    }
+
+    /// The stair world position returned by build_dungeon must resolve back
+    /// to the actual stair tile.
+    #[test]
+    fn dungeon_stair_world_pos_matches_tile() {
+        let (map, stair_world) = build_dungeon(42);
+        let tile = map.world_to_tile(stair_world);
+        assert!(tile.is_some(), "Stair world pos should be within map bounds");
+        let (c, r) = tile.unwrap();
+        assert_eq!(
+            map.get(c, r),
+            TileKind::Stairs,
+            "world_to_tile(stair_world) should point to a Stair tile, got {:?}",
+            map.get(c, r)
+        );
+    }
+
+    /// Dungeon generation must be deterministic — same seed, same layout.
+    #[test]
+    fn dungeon_is_deterministic() {
+        let (map_a, stairs_a) = build_dungeon(99999);
+        let (map_b, stairs_b) = build_dungeon(99999);
+        assert_eq!(stairs_a, stairs_b, "Stair positions should match for same seed");
+        for r in 0..map_a.h {
+            for c in 0..map_a.w {
+                assert_eq!(
+                    map_a.get(c, r), map_b.get(c, r),
+                    "Tile ({c},{r}) differs between two runs with the same seed"
+                );
+            }
+        }
+    }
+
+    /// Different seeds must produce different layouts (with very high probability).
+    #[test]
+    fn different_seeds_produce_different_dungeons() {
+        let (map_a, _) = build_dungeon(1);
+        let (map_b, _) = build_dungeon(2);
+        let any_difference = (0..map_a.h).any(|r| {
+            (0..map_a.w).any(|c| map_a.get(c, r) != map_b.get(c, r))
+        });
+        assert!(any_difference, "Different seeds should produce different dungeons");
+    }
+
+    /// All stair tiles must be within the map boundary.
+    #[test]
+    fn dungeon_stair_within_bounds() {
+        let (map, stair_world) = build_dungeon(42);
+        assert!(
+            map.world_to_tile(stair_world).is_some(),
+            "Stair world position must be within map bounds"
+        );
+    }
+
+    // ── Hub ──────────────────────────────────────────────────────────────────
+
+    /// The hub stair tile must exist and be non-solid.
+    #[test]
+    fn hub_stair_is_not_solid() {
+        let (map, stair_world) = build_hub();
+        assert!(!map.solid_at(stair_world), "Hub stair should not be solid");
+    }
+
+    /// The hub stair world position must resolve to a Stairs tile.
+    #[test]
+    fn hub_stair_world_pos_matches_tile() {
+        let (map, stair_world) = build_hub();
+        let tile = map.world_to_tile(stair_world);
+        assert!(tile.is_some(), "Hub stair world pos should be within bounds");
+        let (c, r) = tile.unwrap();
+        assert_eq!(map.get(c, r), TileKind::Stairs);
+    }
 }

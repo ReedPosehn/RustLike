@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::{SPEED, HALF_W, HALF_H};
-use crate::state::World;
+use crate::state::{World, MapState};
 
 /// Tags the player entity.
 #[derive(Component)]
@@ -15,6 +15,7 @@ pub fn player_movement(
     keyboard: Res<Input<KeyCode>>,
     time:     Res<Time>,
     world:    Res<World>,
+    state:    Res<State<MapState>>,
     mut q:    Query<&mut Transform, With<Player>>,
 ) {
     let mut dir = Vec2::ZERO;
@@ -24,7 +25,7 @@ pub fn player_movement(
     if keyboard.pressed(KeyCode::D) || keyboard.pressed(KeyCode::Right) { dir.x += 1.0; }
     if dir == Vec2::ZERO { return; }
 
-    let map = world.current();
+    let map = world.current(state.get());
     let dt  = time.delta_seconds();
 
     for mut t in &mut q {

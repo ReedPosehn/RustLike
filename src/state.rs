@@ -5,13 +5,22 @@ use crate::player::Player;
 
 // ─── game state ──────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MapState { Hub, Dungeon }
+/// Bevy-managed state for which map is active.
+/// `OnEnter` / `OnExit` schedules handle all map spawning and despawning,
+/// so there is no manual cooldown or state field on `World`.
+#[derive(States, Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MapState {
+    #[default]
+    Hub,
+    Dungeon,
+}
 
-/// Central game resource holding both maps and the current state.
+// ─── world resource ──────────────────────────────────────────────────────────
+
+/// Holds both maps and their stair positions. Does not store the active state —
+/// that is owned by Bevy's `State<MapState>` resource.
 #[derive(Resource)]
 pub struct World {
-    pub state:          MapState,
     pub hub:            Tilemap,
     pub hub_stairs:     Vec2,
     pub dungeon:        Tilemap,
@@ -19,55 +28,83 @@ pub struct World {
 }
 
 impl World {
-    /// Returns a reference to whichever map is currently active.
-    pub fn current(&self) -> &Tilemap {
-        match self.state {
+    /// Returns the map for the given state.
+    pub fn current(&self, state: &MapState) -> &Tilemap {
+        match state {
             MapState::Hub     => &self.hub,
             MapState::Dungeon => &self.dungeon,
         }
     }
+
+    /// Returns the stair world position for the given state.
+    pub fn stairs_for(&self, state: &MapState) -> Vec2 {
+        match state {
+            MapState::Hub     => self.hub_stairs,
+            MapState::Dungeon => self.dungeon_stairs,
+        }
+    }
 }
 
-// ─── stair transition ────────────────────────────────────────────────────────
+// ─── transition systems ──────────────────────────────────────────────────────
 
-/// Counts down each frame after a stair transition; the transition cannot
-/// re-fire until it reaches zero. 60 frames ≈ 1 s at 60 fps — long enough
-/// to outlast the deferred `commands.insert` that repositions the player.
-#[derive(Resource)]
-pub struct StairCooldown(pub u32);
-pub const COOLDOWN_FRAMES: u32 = 60;
+/// Detects when the player steps on a stair tile and requests a state change.
+/// All actual map work (despawn / spawn / teleport) is handled by the
+/// `OnExit` and `OnEnter` systems below, which Bevy runs between frames.
+pub fn stair_detection(
+    state:    Res<State<MapState>>,
+    mut next: ResMut<NextState<MapState>>,
+    world:    Res<World>,
+    p_query:  Query<&Transform, With<Player>>,
+) {
+    let Ok(transform) = p_query.get_single() else { return };
+    let centre = transform.translation.truncate();
 
-pub fn stair_transition(
-    mut world:    ResMut<World>,
-    mut cooldown: ResMut<StairCooldown>,
-    p_query:      Query<(Entity, &Transform), With<Player>>,
-    tile_query:   Query<Entity, With<TileMarker>>,
+    if world.current(state.get()).stairs_at(centre) {
+        let new_state = match state.get() {
+            MapState::Hub     => MapState::Dungeon,
+            MapState::Dungeon => MapState::Hub,
+        };
+        next.set(new_state);
+    }
+}
+
+/// Despawn all tile sprites when leaving any map state.
+/// Registered on both `OnExit(MapState::Hub)` and `OnExit(MapState::Dungeon)`.
+pub fn despawn_map(
+    tile_query: Query<Entity, With<TileMarker>>,
+    mut commands: Commands,
+) {
+    for e in &tile_query { commands.entity(e).despawn(); }
+}
+
+/// Spawn the hub map and teleport the player on entering Hub state.
+pub fn on_enter_hub(
+    world:       Res<World>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    p_query:      Query<Entity, With<Player>>,
 ) {
-    if cooldown.0 > 0 { cooldown.0 -= 1; return; }
+    spawn_map(&mut commands, &asset_server, &world.hub);
+    if let Ok(player_e) = p_query.get_single() {
+        let dest = world.hub_stairs;
+        commands.entity(player_e).insert(
+            Transform::from_xyz(dest.x, dest.y + TILE, 1.0).with_scale(Vec3::splat(SCALE))
+        );
+    }
+}
 
-    let Ok((player_e, transform)) = p_query.get_single() else { return };
-    let centre = Vec2::new(transform.translation.x, transform.translation.y);
-    if !world.current().stairs_at(centre) { return; }
-
-    world.state = match world.state {
-        MapState::Hub     => MapState::Dungeon,
-        MapState::Dungeon => MapState::Hub,
-    };
-
-    for e in &tile_query { commands.entity(e).despawn(); }
-    spawn_map(&mut commands, &asset_server, world.current());
-
-    // Teleport to one tile above the destination stairs — always inside the
-    // room interior and guaranteed to be open ground.
-    let dest = match world.state {
-        MapState::Hub     => world.hub_stairs,
-        MapState::Dungeon => world.dungeon_stairs,
-    };
-    commands.entity(player_e).insert(
-        Transform::from_xyz(dest.x, dest.y + TILE, 1.0).with_scale(Vec3::splat(SCALE))
-    );
-
-    cooldown.0 = COOLDOWN_FRAMES;
+/// Spawn the dungeon map and teleport the player on entering Dungeon state.
+pub fn on_enter_dungeon(
+    world:        Res<World>,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    p_query:      Query<Entity, With<Player>>,
+) {
+    spawn_map(&mut commands, &asset_server, &world.dungeon);
+    if let Ok(player_e) = p_query.get_single() {
+        let dest = world.dungeon_stairs;
+        commands.entity(player_e).insert(
+            Transform::from_xyz(dest.x, dest.y + TILE, 1.0).with_scale(Vec3::splat(SCALE))
+        );
+    }
 }

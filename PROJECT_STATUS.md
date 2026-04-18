@@ -5,105 +5,102 @@ This document provides a snapshot of the current state of the roguelike prototyp
 ## 🚧 Current Context
 
 - **Language & Framework:** Rust using [Bevy 0.11](https://bevyengine.org/) for ECS, rendering, and input.
-- **Workspace:** Single `src/main.rs` containing all logic; dependencies are `bevy` and `rand`.
-- **Assets:** Procedurally generated 32×32 PNG tiles produced by a Python script (`generate_assets.py`).
-- **Vision:** A simple top‑down dungeon crawler with tile-based movement, procedural dungeon generation, and player sprite.
+- **Workspace:** Four modules in `src/` — `main.rs`, `map.rs`, `player.rs`, `state.rs`. Dependencies are `bevy` and `rand`.
+- **Assets:** Procedurally generated 32×32 PNG tiles and character sprites produced by `generate_assets.py` (Pillow). All characters are centred on the canvas.
+- **Vision:** A top-down dungeon crawler with tile-based movement, procedural dungeon generation, Bevy-managed state transitions, and a growing gameplay loop.
 
 ## ✅ Features Implemented
 
 1. **Project Setup** – Cargo project with Bevy, window configuration.
-2. **Tilemap System** – `Tilemap` struct supporting hub and dungeon layouts.
-3. **Procedural Dungeon Generator** – random rooms and corridors with stairs to hub.
-4. **Player Rendering** – warrior sprite positioned bottom‑center, scaled globally.
-5. **Basic Movement** – WASD/arrow keys move player; collision prevents entry into solid tiles.
-6. **State Transitions** – stepping on stairs swaps between hub and dungeon with teleport+nudge.
-7. **Asset Generation Tool** – Python script to create placeholder art and inspect sprite bounds.
+2. **Tilemap System** – `Tilemap` struct with `tile_center` / `world_to_tile` coordinate helpers.
+3. **Procedural Dungeon Generator** – Seed-based random rooms, L-shaped corridors, and stairs. Dungeon fits within the 1280×720 window.
+4. **Player Rendering** – Warrior sprite centred on a 32×32 canvas, scaled globally.
+5. **AABB Movement & Collision** – WASD/arrow keys; two-corner leading-face probes; independent X/Y resolution for wall sliding.
+6. **State Transitions** – Bevy `States` API; `OnEnter`/`OnExit` schedules handle map despawn/spawn and player teleport. No manual cooldown.
+7. **Seed-Based Generation** – Seed printed to console at startup; set `FIXED_SEED` in `main.rs` to replay any dungeon.
+8. **Automated Tests** – 14 tests in `map.rs` covering coordinate helpers, dungeon generation invariants, and hub correctness.
+9. **Asset Generation Tool** – `generate_assets.py` creates all sprites and tiles with proper canvas centering.
 
 ## 📂 Source Structure
 
-- `src/main.rs` – constants, app entry point, `setup` system.
-- `src/map.rs` – `TileKind`, `Tilemap`, map builders, `spawn_map`, `TileMarker`.
-- `src/player.rs` – `Player` component, `player_movement` system.
-- `src/state.rs` – `MapState`, `World`, `StairCooldown`, `stair_transition` system.
-- `Cargo.toml` – dependencies.
-- `generate_assets.py` – tile and sprite generator.
+```
+src/
+├── main.rs     — constants, DungeonSeed resource, app entry, setup
+├── map.rs      — TileKind, Tilemap, map builders, spawn_map, TileMarker, tests
+├── player.rs   — Player component, AABB player_movement system
+└── state.rs    — MapState (Bevy States), World resource, transition systems
+```
+
+Other files:
+- `Cargo.toml` — dependencies (`bevy = "0.11"`, `rand = "0.8"`)
+- `generate_assets.py` — sprite and tile generator
+- `CLAUDE.md` — architecture reference for Claude sessions
+- `PROJECT_STATUS.md` — this file
+- `README.md` — user-facing build/run instructions and roadmap
 
 ## 🛠 Recent Work
 
+### Session — Phase 3 complete (April 2026)
+
+- **Bevy `States` API** — replaced manual `MapState` field in `World` with Bevy's first-class `States`. `stair_transition` split into focused systems: `stair_detection` (detects and calls `next.set()`), `despawn_map` (`OnExit`), `on_enter_hub` / `on_enter_dungeon` (`OnEnter`). `StairCooldown` removed entirely — `OnEnter`/`OnExit` run between frames so no cooldown is needed.
+
+- **Seed-based dungeon generation** — `build_dungeon(seed: u64)` uses `StdRng::seed_from_u64`. Seed printed to console at startup; `FIXED_SEED` constant in `main.rs` pins a layout. `DungeonSeed` resource stores the seed for future save/load.
+
+- **Dungeon fits screen** — `DUNGEON_W` 40→33, `DUNGEON_H` 30→18, derived from `floor(1280/TILE) × floor(720/TILE)`. The entire dungeon is always visible without scrolling.
+
+- **Automated tests** — 14 tests in `#[cfg(test)]` at the bottom of `map.rs`. Covers `tile_center`/`world_to_tile` round-trips, boundary conditions, dungeon invariants (room count, stair count, stair solidity, stair bounds), determinism, and hub correctness.
+
 ### Session — Module refactor & collision rewrite (April 2026)
 
-- **Rebuilt movement and collision from scratch** using a clean AABB approach.
-  `Anchor::Center` on the player sprite means `translation` = sprite centre.
-  Two corner probes on the leading face of movement, axes resolved independently
-  for wall sliding. The correct `world_to_tile` formula is `floor(px / TILE + w/2)`
-  — no `TILE/2` offset (that offset caused half-tile gaps on two sides).
-
-- **Fixed sprite assets** — original sprites were 8×15px art in the corner of a
-  32×32 canvas, making the hitbox appear enormous relative to the visible character.
-  `generate_assets.py` was rewritten to produce properly centred, full-canvas sprites
-  for all characters and enemies.
-
+- **Rebuilt movement and collision from scratch** using AABB. `Anchor::Center` → translation = sprite centre. Two corner probes on the leading face; axes independent for wall sliding. Correct `world_to_tile` formula: `floor(px / TILE + w/2)` (no `TILE/2` offset).
+- **Fixed sprite assets** — original art was 8×15px in the corner of a 32×32 canvas. `generate_assets.py` rewritten for properly centred, full-canvas sprites.
 - **Split `src/main.rs` into modules**: `map.rs`, `player.rs`, `state.rs`, `main.rs`.
+- **Added `CLAUDE.md`** with architecture notes and coordinate system documentation.
 
-- **Added `CLAUDE.md`** with architecture notes, coordinate system documentation,
-  and caveats for future Claude sessions.
+## 📌 Current Known Issues
 
-- **Stair transition fixes**: cooldown increased to 60 frames to outlast Bevy's
-  deferred command application; player teleports one tile above destination stairs
-  (always inside the room interior, guaranteed open).
-
----
-
-
-Over numerous iterations, collision logic was progressively refined:
-
-- Started with simple tile lookup based on player position.
-- Added AABB-based corner sampling and helper functions.
-- Introduced a child/parent entity to offset the sprite and collider.
-- Attempted pixel-accurate hitbox using sprite bounding-box constants.
-- Hit compile-time const evaluation issues, and collision became broken.
-- Ultimately **rolled back to the original simple tile-based collision** to restore playability.
-
-The current build uses the stable movement code that allowed dungeon navigation before experimentation.
-
-## 📌 Current Known Issues & Warnings
-
-- Some unused enum variants and struct fields trigger compiler warnings (`Sand`, `Gravel`, `Tile.tile_type`).
-- Movement still uses a single tile test; sliding along walls isn't implemented.
-- No monster or combat logic present.
-- Player sprite may clip slightly due to scale/anchor mismatch; visual alignment is not perfected.
+- No enemies or combat — sprite assets exist (goblin, orc, skeleton, spider, mage, paladin, rogue) but are not wired in.
+- No camera scrolling — dungeon is sized to fit the window instead.
+- Dungeon dimensions must be manually recalculated if `SCALE` or window resolution changes.
+- Stair detection uses player centre only — could miss at high speeds (acceptable for now).
 
 ## 🔮 Next Phases & Steps
 
-### Phase 1 – Foundation & Clean-up
-1. ~~**Refactor code into modules**~~ ✅ Done — `map.rs`, `player.rs`, `state.rs`, `main.rs`.
-2. **Address compiler warnings** and remove dead code (unused tile types, etc.).
-3. **Add comments and documentation** for public functions and types.
-4. **Expand asset pipeline**: load actual art, possibly integrate texture atlases.
+### ✅ Phase 1 – Prototype
+- ✅ Project setup, tilemap, procedural dungeon, player movement, state transitions, assets.
 
-### Phase 2 – Improve Movement & Collision
-1. **Revisit hitbox strategy**: store a `Collider` component with configurable size/offset.
-2. **Implement sliding movement** so players slide along walls instead of stopping completely.
-3. **Support diagonal movement and consistent speed**.
-4. **Consider continuous collision detection** for smoother behavior.
+### ✅ Phase 2 – Movement & Collision
+- ✅ AABB collision with wall sliding
+- ✅ Independent X/Y axis resolution
+- ✅ Sprite hitbox aligned to canvas
 
-### Phase 3 – Gameplay Mechanics
-1. **Entities**: enemies, items, doors, traps.
-2. **Combat system**: turn-based or real-time attacks, health, damage.
-3. **Inventory & pickup logic**.
-4. **Procedural level features**: keys/locks, rooms with themes.
+### ✅ Phase 3 – Architecture & Developer Experience
+- ✅ Split `main.rs` into modules
+- ✅ Adopt Bevy `States` API (`OnEnter`/`OnExit`)
+- ✅ Seed-based dungeon generation
+- ✅ Dungeon sized to fit screen
+- ✅ Automated tests (14 in `map.rs`)
 
-### Phase 4 – Polish & UI
-1. **HUD** with health, inventory, messages.
-2. **Sound effects / music** integration.
-3. **Save/load system**.
-4. **Better art and animations** (walk cycle, idle, attack).
-5. **Optional: roguelike features** like permadeath, procedural monsters, dungeon depth.
+### ⚔️ Phase 4 – Enemies & Combat (next)
+1. **Enemy component and spawning** — spawn goblins/orcs/skeletons in dungeon rooms using existing sprites.
+2. **Movement AI** — random walk or player-chase behaviour.
+3. **Melee combat** — health component, attack-when-adjacent, damage.
+4. **Death and despawn** — remove enemies on death, track kill count.
+5. **Multiple player classes** — mage, paladin, rogue sprites already present.
 
-### Utility Tasks
-- Add automated testing for map generation and movement logic.
-- Create a `README.md` with build/run instructions and development notes (this document can serve as a starting point).
-- Set up version control commits for milestones or use Git tags.
+### 🎮 Phase 5 – Gameplay Mechanics
+1. Inventory and item pickup.
+2. Procedural level features: keys/locks, themed rooms.
+3. Dungeon depth and increasing difficulty.
+
+### ✨ Phase 6 – Polish & UI
+1. HUD: health bar, inventory, message log.
+2. Sound effects and music.
+3. Save/load system (seed already stored in `DungeonSeed` resource).
+4. Walk cycle, idle, and attack animations.
+5. Permadeath and roguelike meta-progression.
+6. Camera scrolling for larger dungeons.
 
 ## 🎯 Summary
-The project is at a playable prototype stage with tile‑based movement and procedural level switching. The most recent focus on pixel-perfect collision led to breakage, so we've rolled back to a known-good state. Going forward, splitting the codebase and planning feature phases will make future experimentation safer and more controlled.
+
+The project has a solid, well-tested foundation. Phase 3 is complete: the codebase is modular, state transitions use Bevy's native API, dungeons are reproducible via seed, and the dungeon always fits on screen. Phase 4 (enemies and combat) is the next milestone — all the sprite assets are already in place.
