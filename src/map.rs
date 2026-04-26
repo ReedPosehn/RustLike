@@ -122,6 +122,13 @@ pub fn build_hub() -> (Tilemap, Vec2) {
     (m.clone(), m.tile_center(sc, sr))
 }
 
+/// Public room centre positions returned by `build_dungeon`.
+/// Used by the enemy spawner to place enemies in rooms.
+#[derive(Debug, Clone, Copy)]
+pub struct RoomInfo {
+    pub centre: Vec2,
+}
+
 struct Room { x: usize, y: usize, w: usize, h: usize }
 impl Room {
     fn center(&self) -> (usize, usize) { (self.x + self.w / 2, self.y + self.h / 2) }
@@ -132,9 +139,9 @@ impl Room {
 }
 
 /// Build a dungeon deterministically from `seed`.
-/// Pass the same seed to reproduce the exact same layout.
-/// The seed is printed to stdout at startup so you can record it.
-pub fn build_dungeon(seed: u64) -> (Tilemap, Vec2) {
+/// Returns the tilemap, the stair world position, and the centre of each room.
+/// The room list is used by the enemy spawner; the last room holds the stairs.
+pub fn build_dungeon(seed: u64) -> (Tilemap, Vec2, Vec<RoomInfo>) {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut m   = Tilemap::new(DUNGEON_W, DUNGEON_H, TileKind::Wall);
     let mut rooms: Vec<Room> = Vec::new();
@@ -176,7 +183,14 @@ pub fn build_dungeon(seed: u64) -> (Tilemap, Vec2) {
         Vec2::ZERO
     };
 
-    (m, stair_pos)
+    // Collect room centres for the enemy spawner.
+    // Order is preserved — the last entry corresponds to the stair room.
+    let room_infos: Vec<RoomInfo> = rooms.iter().map(|r| {
+        let (c, row) = r.center();
+        RoomInfo { centre: m.tile_center(c, row) }
+    }).collect();
+
+    (m, stair_pos, room_infos)
 }
 
 // ─── tests ───────────────────────────────────────────────────────────────────
@@ -265,7 +279,7 @@ mod tests {
     /// A freshly generated dungeon must contain at least one room (Dirt tile).
     #[test]
     fn dungeon_contains_at_least_one_room() {
-        let (map, _) = build_dungeon(42);
+        let (map, _, _) = build_dungeon(42);
         let has_floor = (0..map.h).any(|r| (0..map.w).any(|c| map.get(c, r) == TileKind::Dirt));
         assert!(has_floor, "Dungeon should contain at least one Dirt (floor) tile");
     }
@@ -273,7 +287,7 @@ mod tests {
     /// The dungeon must contain exactly one stair tile.
     #[test]
     fn dungeon_has_exactly_one_stair() {
-        let (map, _) = build_dungeon(42);
+        let (map, _, _) = build_dungeon(42);
         let stair_count = (0..map.h)
             .flat_map(|r| (0..map.w).map(move |c| (c, r)))
             .filter(|&(c, r)| map.get(c, r) == TileKind::Stairs)
@@ -284,7 +298,7 @@ mod tests {
     /// The stair tile must be walkable (not solid).
     #[test]
     fn dungeon_stair_is_not_solid() {
-        let (map, stair_world) = build_dungeon(42);
+        let (map, stair_world, _) = build_dungeon(42);
         assert!(
             !map.solid_at(stair_world),
             "Stair world position should not be solid"
@@ -295,7 +309,7 @@ mod tests {
     /// to the actual stair tile.
     #[test]
     fn dungeon_stair_world_pos_matches_tile() {
-        let (map, stair_world) = build_dungeon(42);
+        let (map, stair_world, _) = build_dungeon(42);
         let tile = map.world_to_tile(stair_world);
         assert!(tile.is_some(), "Stair world pos should be within map bounds");
         let (c, r) = tile.unwrap();
@@ -310,8 +324,8 @@ mod tests {
     /// Dungeon generation must be deterministic — same seed, same layout.
     #[test]
     fn dungeon_is_deterministic() {
-        let (map_a, stairs_a) = build_dungeon(99999);
-        let (map_b, stairs_b) = build_dungeon(99999);
+        let (map_a, stairs_a, _) = build_dungeon(99999);
+        let (map_b, stairs_b, _) = build_dungeon(99999);
         assert_eq!(stairs_a, stairs_b, "Stair positions should match for same seed");
         for r in 0..map_a.h {
             for c in 0..map_a.w {
@@ -326,8 +340,8 @@ mod tests {
     /// Different seeds must produce different layouts (with very high probability).
     #[test]
     fn different_seeds_produce_different_dungeons() {
-        let (map_a, _) = build_dungeon(1);
-        let (map_b, _) = build_dungeon(2);
+        let (map_a, _, _) = build_dungeon(1);
+        let (map_b, _, _) = build_dungeon(2);
         let any_difference = (0..map_a.h).any(|r| {
             (0..map_a.w).any(|c| map_a.get(c, r) != map_b.get(c, r))
         });
@@ -337,7 +351,7 @@ mod tests {
     /// All stair tiles must be within the map boundary.
     #[test]
     fn dungeon_stair_within_bounds() {
-        let (map, stair_world) = build_dungeon(42);
+        let (map, stair_world, _) = build_dungeon(42);
         assert!(
             map.world_to_tile(stair_world).is_some(),
             "Stair world position must be within map bounds"

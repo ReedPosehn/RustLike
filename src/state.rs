@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::{TILE, SCALE};
-use crate::map::{Tilemap, TileMarker, spawn_map};
+use crate::map::{Tilemap, TileMarker, RoomInfo, spawn_map};
 use crate::player::Player;
 
 // ─── game state ──────────────────────────────────────────────────────────────
@@ -17,14 +17,17 @@ pub enum MapState {
 
 // ─── world resource ──────────────────────────────────────────────────────────
 
-/// Holds both maps and their stair positions. Does not store the active state —
-/// that is owned by Bevy's `State<MapState>` resource.
+/// Holds both maps, their stair positions, and dungeon room data.
+/// Does not store the active state — that is owned by Bevy's `State<MapState>`.
 #[derive(Resource)]
 pub struct World {
     pub hub:            Tilemap,
     pub hub_stairs:     Vec2,
     pub dungeon:        Tilemap,
     pub dungeon_stairs: Vec2,
+    /// Centre world position of each dungeon room, in generation order.
+    /// The last entry is the stair room. Used by the enemy spawner.
+    pub dungeon_rooms:  Vec<RoomInfo>,
 }
 
 impl World {

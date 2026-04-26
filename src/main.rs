@@ -4,6 +4,7 @@ use rand::Rng;
 mod map;
 mod player;
 mod state;
+mod enemies;
 
 use map::{build_hub, build_dungeon, spawn_map};
 use player::{Player, player_movement};
@@ -11,6 +12,7 @@ use state::{
     MapState, World,
     stair_detection, despawn_map, on_enter_hub, on_enter_dungeon,
 };
+use enemies::{spawn_enemies, despawn_enemies, enemy_ai};
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -28,20 +30,16 @@ pub const SPEED: f32 = 150.0; // player movement speed in world units per second
 
 // Dungeon dimensions chosen so the map fits exactly within the 1280×720 window
 // at SCALE=1.2 (TILE=38.4px): floor(1280/38.4)=33 cols, floor(720/38.4)=18 rows.
-// This means the entire dungeon is always visible without scrolling.
 pub const DUNGEON_W: usize = 33;
 pub const DUNGEON_H: usize = 18;
 
 // ─── seed ────────────────────────────────────────────────────────────────────
 
 /// Stores the seed used to generate the current dungeon.
-/// Check the console at startup to see the seed, then set `FIXED_SEED`
-/// to reproduce any run exactly.
 #[derive(Resource)]
 pub struct DungeonSeed(pub u64);
 
-/// Set to `Some(seed)` to force a specific dungeon layout, or `None` to
-/// generate a fresh random dungeon every run.
+/// Set to `Some(seed)` to force a specific dungeon layout, or `None` for random.
 const FIXED_SEED: Option<u64> = None;
 
 // ─── main ────────────────────────────────────────────────────────────────────
@@ -50,8 +48,8 @@ fn main() {
     let seed = FIXED_SEED.unwrap_or_else(|| rand::thread_rng().gen());
     println!("Dungeon seed: {seed}  (set FIXED_SEED = Some({seed}) to replay)");
 
-    let (hub,     hub_stairs)     = build_hub();
-    let (dungeon, dungeon_stairs) = build_dungeon(seed);
+    let (hub, hub_stairs)                    = build_hub();
+    let (dungeon, dungeon_stairs, dungeon_rooms) = build_dungeon(seed);
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -62,19 +60,19 @@ fn main() {
             }),
             ..Default::default()
         }))
-        .insert_resource(World { hub, hub_stairs, dungeon, dungeon_stairs })
+        .insert_resource(World { hub, hub_stairs, dungeon, dungeon_stairs, dungeon_rooms })
         .insert_resource(DungeonSeed(seed))
         .add_state::<MapState>()
-        // Despawn the old map on leaving either state
+        // Map tile lifecycle
         .add_systems(OnExit(MapState::Hub),      despawn_map)
         .add_systems(OnExit(MapState::Dungeon),  despawn_map)
-        // Spawn the new map and teleport the player on entering either state.
-        // OnEnter(Hub) is NOT called at startup — the initial hub is spawned
-        // by `setup` so the player entity exists before any teleport.
         .add_systems(OnEnter(MapState::Hub),     on_enter_hub)
-        .add_systems(OnEnter(MapState::Dungeon), on_enter_dungeon)
+        .add_systems(OnEnter(MapState::Dungeon), (on_enter_dungeon, spawn_enemies))
+        // Enemy lifecycle — only exist in the dungeon
+        .add_systems(OnExit(MapState::Dungeon),  despawn_enemies)
         .add_systems(Startup, setup)
         .add_systems(Update, (player_movement, stair_detection))
+        .add_systems(Update, enemy_ai.run_if(in_state(MapState::Dungeon)))
         .run();
 }
 
