@@ -2,8 +2,10 @@ use bevy::prelude::*;
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use crate::{SCALE, TILE, HALF_W, HALF_H, DungeonSeed};
-use crate::state::{World, MapState};
+use crate::state::{GameWorld, MapState};
 use crate::player::Player;
+use crate::combat::Health;
+use crate::hud::spawn_enemy_health_bar;
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -37,6 +39,13 @@ impl EnemyKind {
             EnemyKind::Goblin   => "goblin.png",
             EnemyKind::Orc      => "orc.png",
             EnemyKind::Skeleton => "skeleton.png",
+        }
+    }
+    pub fn max_hp(self) -> i32 {
+        match self {
+            EnemyKind::Goblin   => 30,
+            EnemyKind::Orc      => 60,
+            EnemyKind::Skeleton => 45,
         }
     }
 }
@@ -100,7 +109,7 @@ impl EnemyAi {
 pub fn spawn_enemies(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    world:        Res<World>,
+    world:        Res<GameWorld>,
     seed:         Res<DungeonSeed>,
 ) {
     // Offset the seed so enemy placement RNG is independent from map gen.
@@ -127,7 +136,7 @@ pub fn spawn_enemies(
             // and its spawn index so they wander independently.
             let ai_seed = seed.0.wrapping_add(rng.gen::<u64>());
 
-            commands.spawn((
+            let enemy_entity = commands.spawn((
                 SpriteBundle {
                     texture: asset_server.load(kind.asset()),
                     transform: Transform::from_xyz(
@@ -138,9 +147,12 @@ pub fn spawn_enemies(
                     ..Default::default()
                 },
                 Enemy { kind },
+                Health::new(kind.max_hp()),
                 EnemyAi::new(ai_seed),
                 EnemyMarker,
-            ));
+            )).id();
+
+            spawn_enemy_health_bar(&mut commands, enemy_entity);
         }
     }
 }
@@ -159,7 +171,7 @@ pub fn despawn_enemies(
 /// Uses the same AABB leading-face collision probes as the player.
 pub fn enemy_ai(
     time:       Res<Time>,
-    world:      Res<World>,
+    world:      Res<GameWorld>,
     p_query:    Query<&Transform, With<Player>>,
     mut e_query: Query<(&mut Transform, &mut EnemyAi), Without<Player>>,
 ) {

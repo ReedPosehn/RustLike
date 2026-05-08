@@ -1,10 +1,14 @@
 use bevy::prelude::*;
 use crate::{SPEED, HALF_W, HALF_H};
-use crate::state::{World, MapState};
+use crate::state::{GameWorld, MapState};
+use crate::combat::{Facing, Health, ContactDamageTimer};
 
 /// Tags the player entity.
 #[derive(Component)]
 pub struct Player;
+
+/// Starting player health.
+pub const PLAYER_MAX_HP: i32 = 100;
 
 /// AABB collision — Anchor::Center means translation = sprite centre.
 /// Player hitbox: centre ± (HALF_W, HALF_H).
@@ -14,7 +18,7 @@ pub struct Player;
 pub fn player_movement(
     keyboard: Res<Input<KeyCode>>,
     time:     Res<Time>,
-    world:    Res<World>,
+    world:    Res<GameWorld>,
     state:    Res<State<MapState>>,
     mut q:    Query<&mut Transform, With<Player>>,
 ) {
@@ -53,4 +57,21 @@ pub fn player_movement(
             if !blocked { t.translation.y = ny; }
         }
     }
+}
+
+/// Bundle of all components attached to the player entity at spawn.
+pub fn spawn_player(commands: &mut Commands, asset_server: &AssetServer, pos: Vec2) {
+    use crate::SCALE;
+    commands.spawn((
+        SpriteBundle {
+            texture: asset_server.load("warrior.png"),
+            transform: Transform::from_xyz(pos.x, pos.y, 1.0)
+                .with_scale(Vec3::splat(SCALE)),
+            ..Default::default()
+        },
+        Player,
+        Health::new(PLAYER_MAX_HP),
+        Facing::default(),
+        ContactDamageTimer::default(),
+    ));
 }

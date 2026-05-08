@@ -3,7 +3,7 @@
 Generate pixel art sprites for RustLike — all characters centred on 32x32 canvas.
 Requires: pip install pillow
 """
-from PIL import Image
+from PIL import Image, ImageDraw
 import os
 
 
@@ -242,39 +242,157 @@ for r2 in [6, 7, 24, 25]:
         SP[r2][i] = BLACK
 save_sprite("assets/spider.png", SP)
 
-# ── TILES (unchanged — these already fill the canvas) ────────────────────────
-DGRAY2 = (64, 64, 64, 255)
-GRAY2 = (128, 128, 128, 255)
-LBROWN2 = (180, 120, 70, 255)
-BROWN2 = (139, 90, 43, 255)
-DBLUE2 = (50, 100, 200, 255)
-BLUE2 = (100, 150, 255, 255)
-DGREEN2 = (50, 120, 50, 255)
-GREEN2 = (100, 200, 100, 255)
-YELLOW2 = (255, 255, 100, 255)
-GOLD2 = (200, 180, 50, 255)
+# ── TILES — original hand-crafted patterns ───────────────────────────────────
+# Colors shared with character sprites above
+DG = (50, 120, 50, 255)  # dark green
+G = (100, 200, 100, 255)  # green
+GR = (128, 128, 128, 255)  # gray
+DGR = (64, 64, 64, 255)  # dark gray
+LBR = (180, 120, 70, 255)  # light brown
+BR = (139, 90, 43, 255)  # brown
+DB = (50, 100, 200, 255)  # dark blue
+BL = (100, 150, 255, 255)  # blue
+YL = (255, 255, 100, 255)  # yellow
+GL = (200, 180, 50, 255)  # gold
+BK = (0, 0, 0, 255)  # black
 
+grass_tile = [
+    [DG, DG, DG, DG, DG, DG, DG, DG] * 4,
+    [DG, G, G, DG, DG, G, DG, G] * 4,
+    [DG, G, DG, G, G, DG, G, DG] * 4,
+    [DG, DG, G, G, DG, DG, DG, G] * 4,
+    [G, DG, G, DG, G, DG, G, DG] * 4,
+    [G, G, DG, G, DG, G, DG, G] * 4,
+    [DG, G, G, DG, G, G, DG, DG] * 4,
+    [DG, DG, DG, DG, DG, DG, DG, DG] * 4,
+] * 4
+save_sprite("assets/grass.png", grass_tile)
 
-def tile4(a, b):
-    row1 = [a, a, b, b] * 8
-    row2 = [a, b, a, b] * 8
-    row3 = [b, b, a, a] * 8
-    base = [[a] * 32, row1, row2, row3, [a] * 32, row3, row2, row1]
-    result = []
-    for _ in range(4):
-        result.extend(base)
-    return result[:32]
+stone_tile = [
+    [GR] * 32,
+    [GR, GR, DGR, DGR] * 8,
+    [GR, DGR, GR, DGR] * 8,
+    [DGR, DGR, GR, GR] * 8,
+    [GR] * 32,
+    [DGR, DGR, GR, GR] * 8,
+    [GR, DGR, GR, DGR] * 8,
+    [GR, GR, DGR, DGR] * 8,
+] * 4
+save_sprite("assets/stone.png", stone_tile)
 
+dirt_tile = [
+    [LBR] * 32,
+    [LBR, BR, BR, LBR] * 8,
+    [LBR, BR, LBR, BR] * 8,
+    [BR, BR, LBR, LBR] * 8,
+    [LBR] * 32,
+    [BR, BR, LBR, LBR] * 8,
+    [LBR, BR, LBR, BR] * 8,
+    [LBR, BR, BR, LBR] * 8,
+] * 4
+save_sprite("assets/dirt.png", dirt_tile)
 
-save_sprite("assets/grass.png", tile4(DGREEN2, GREEN2))
-save_sprite("assets/stone.png", tile4(GRAY2, DGRAY2))
-save_sprite("assets/dirt.png", tile4(LBROWN2, BROWN2))
-save_sprite("assets/wood.png", tile4((160, 82, 45, 255), (180, 100, 50, 255)))
-save_sprite("assets/water.png", tile4(DBLUE2, BLUE2))
-save_sprite("assets/sand.png", tile4(YELLOW2, GOLD2))
-save_sprite("assets/gravel.png", tile4((169, 169, 169, 255), (105, 105, 105, 255)))
-save_sprite("assets/rock.png", tile4(BLACK, DGRAY2))
-save_sprite("assets/wall.png", tile4(GRAY2, DGRAY2))
-save_sprite("assets/door.png", tile4(BROWN2, LBROWN2))
+WD1 = (160, 82, 45, 255)
+WD2 = (180, 100, 50, 255)
+WD3 = (139, 69, 19, 255)
+wood_tile = [
+    [WD3] * 32,
+    [WD1, WD2] * 16,
+    [WD2, WD1] * 16,
+    [WD1, WD2] * 16,
+    [WD3] * 32,
+    [WD2, WD1] * 16,
+    [WD1, WD2] * 16,
+    [WD2, WD1] * 16,
+] * 4
+save_sprite("assets/wood.png", wood_tile)
+
+water_tile = [
+    [DB] * 32,
+    [DB, BL, BL, DB] * 8,
+    [DB, BL, DB, BL] * 8,
+    [BL, BL, DB, DB] * 8,
+    [DB] * 32,
+    [BL, BL, DB, DB] * 8,
+    [DB, BL, DB, BL] * 8,
+    [DB, BL, BL, DB] * 8,
+] * 4
+save_sprite("assets/water.png", water_tile)
+
+sand_tile = [
+    [YL] * 32,
+    [YL, GL, GL, YL] * 8,
+    [YL, GL, YL, GL] * 8,
+    [GL, GL, YL, YL] * 8,
+    [YL] * 32,
+    [GL, GL, YL, YL] * 8,
+    [YL, GL, YL, GL] * 8,
+    [YL, GL, GL, YL] * 8,
+] * 4
+save_sprite("assets/sand.png", sand_tile)
+
+GV1 = (169, 169, 169, 255)
+GV2 = (105, 105, 105, 255)
+gravel_tile = [
+    [GV1] * 32,
+    [GV1, GV2, GV2, GV1] * 8,
+    [GV1, GV2, GV1, GV2] * 8,
+    [GV2, GV2, GV1, GV1] * 8,
+    [GV1] * 32,
+    [GV2, GV2, GV1, GV1] * 8,
+    [GV1, GV2, GV1, GV2] * 8,
+    [GV1, GV2, GV2, GV1] * 8,
+] * 4
+save_sprite("assets/gravel.png", gravel_tile)
+
+rock_tile = [
+    [BK] * 32,
+    [BK, DGR, DGR, BK] * 8,
+    [BK, DGR, BK, DGR] * 8,
+    [DGR, DGR, BK, BK] * 8,
+    [BK] * 32,
+    [DGR, DGR, BK, BK] * 8,
+    [BK, DGR, BK, DGR] * 8,
+    [BK, DGR, DGR, BK] * 8,
+] * 4
+save_sprite("assets/rock.png", rock_tile)
+
+wall_tile = [
+    [GR] * 32,
+    [GR, GR, GR, GR] * 8,
+    [DGR, DGR, DGR, DGR] * 8,
+    [GR, GR, GR, GR] * 8,
+    [DGR, DGR, DGR, DGR] * 8,
+    [GR, GR, GR, GR] * 8,
+    [DGR, DGR, DGR, DGR] * 8,
+    [GR, GR, GR, GR] * 8,
+] * 4
+save_sprite("assets/wall.png", wall_tile)
+
+door_tile = [
+    [BR] * 32,
+    [BR] * 32,
+    [BR, BR, BR, BR, GL, GL, BR, BR] * 4,
+    [BR, BR, BR, BR, GL, GL, BR, BR] * 4,
+    [BR, BR, BR, BR, BR, BR, BR, BR] * 4,
+    [BR, BR, BR, BR, BR, BR, BR, BR] * 4,
+    [BR, BR, YL, YL, YL, YL, BR, BR] * 4,
+    [BR, BR, BR, BR, BR, BR, BR, BR] * 4,
+] * 4
+save_sprite("assets/door.png", door_tile)
+
+# ── UI assets ────────────────────────────────────────────────────────────────
+
+# Panel background — darker semi-transparent rounded rectangle (alpha 185 ≈ 73%).
+panel_img = Image.new("RGBA", (340, 46), (0, 0, 0, 0))
+panel_draw = ImageDraw.Draw(panel_img)
+try:
+    panel_draw.rounded_rectangle([0, 0, 339, 45], radius=10, fill=(0, 0, 0, 225))
+except AttributeError:
+    panel_draw.rectangle([0, 0, 339, 45], fill=(0, 0, 0, 225))
+panel_img.save("assets/ui_panel.png")
+print("✓  assets/ui_panel.png")
+
+# Gradient bar fills are generated in Rust (hud.rs) via Assets<Image> — no PNG needed.
 
 print("\n✅  All assets written to ./assets/")

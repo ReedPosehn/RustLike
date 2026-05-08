@@ -4,12 +4,14 @@ This file gives Claude context about the project so it can assist effectively.
 
 ## Project Overview
 
-RustLike is a top-down roguelike prototype written in Rust using the Bevy 0.11 ECS framework. It features procedural seeded dungeons, AABB movement with wall sliding, Bevy-managed state transitions, enemy AI with wander/chase behaviour, and a full automated test suite. The codebase is split across five modules in `src/`:
+RustLike is a top-down roguelike prototype written in Rust using the Bevy 0.11 ECS framework. It features procedural seeded dungeons, AABB movement with wall sliding, Bevy-managed state transitions, real-time enemy AI with wander/chase behaviour, melee combat with health and damage, and a HUD with gradient health bars. The codebase is split across six modules in `src/`:
 - `main.rs` — constants, `DungeonSeed` resource, app entry point, `setup` system
 - `map.rs` — `TileKind`, `Tilemap`, `RoomInfo`, map builders, `spawn_map`, `TileMarker`, tests
-- `player.rs` — `Player` component, `player_movement` system
-- `state.rs` — `MapState` (Bevy `States`), `World` resource, transition systems
+- `player.rs` — `Player`, `spawn_player`, `player_movement`
+- `state.rs` — `MapState` (Bevy `States`), `GameWorld` resource, transition systems
 - `enemies.rs` — `EnemyKind`, `Enemy`, `EnemyAi`, spawn/despawn/AI systems
+- `combat.rs` — `Health`, `Dead`, `Facing`, `DamageEvent`, `SplatEvent`, combat systems
+- `hud.rs` — `BarAssets`, player health bar (gradient), enemy bars, damage splats
 
 ## Build & Run
 
@@ -20,7 +22,7 @@ cargo run
 # Run automated tests
 cargo test
 
-# Regenerate all sprite assets (requires Pillow)
+# Regenerate all sprite and tile assets (requires Pillow)
 pip install pillow
 python generate_assets.py
 ```
@@ -47,8 +49,13 @@ Assets are 32×32 PNG files in `assets/`. The game window is 1280×720.
 | `CHASE_SPEED` | 90.0 | Enemy speed while chasing player |
 | `CHASE_RADIUS` | `TILE * 5.0` | Distance at which enemy starts chasing |
 | `LOSE_RADIUS` | `TILE * 7.0` | Distance at which chasing enemy gives up |
-| `WANDER_WALK_SECS` | 1.2 | Seconds per wander step |
-| `WANDER_PAUSE_SECS` | 0.6 | Seconds paused between wander steps |
+
+### Key Constants (`src/combat.rs`)
+| Constant | Value | Purpose |
+|---|---|---|
+| `CONTACT_DAMAGE_INTERVAL` | 0.8s | Seconds between enemy contact damage ticks |
+| `PLAYER_MELEE_DAMAGE` | 25 | Damage per melee strike (F key) |
+| `ENEMY_CONTACT_DAMAGE` | 10 | Damage per enemy contact tick |
 
 ### Tilemap Coordinate System
 - **col 0** = leftmost column, **row 0** = bottom row (Y-up, matching Bevy world space)
@@ -60,85 +67,85 @@ Assets are 32×32 PNG files in `assets/`. The game window is 1280×720.
 - Inverse (world → tile): `col = floor(px / TILE + w/2)` — **no TILE/2 offset**. Adding `- TILE/2` shifts the grid by half a tile and causes asymmetric collision gaps.
 
 ### Collision System
-AABB collision with `Anchor::Center` (translation = sprite centre). Used by both the player and enemies:
-- **X axis**: test two corners on the leading face — `(face_x, py ± (HALF_H - 1))`.
-- **Y axis**: test two corners on the leading face — `(px ± (HALF_W - 1), face_y)`.
-- Axes resolve independently → wall sliding works automatically.
-- The 1px inset on perpendicular corners prevents false positives on exact tile boundaries.
-- Out-of-bounds probes (`world_to_tile` returns `None`) are treated as solid.
+AABB collision with `Anchor::Center` (translation = sprite centre). Used by both player and enemies:
+- **X axis**: test two corners on the leading face — `(face_x, py ± (HALF_H - 1))`
+- **Y axis**: test two corners on the leading face — `(px ± (HALF_W - 1), face_y)`
+- Axes resolve independently → wall sliding works automatically
+- Out-of-bounds probes treated as solid
 
-### Enemy AI (`src/enemies.rs`)
-Each enemy has an `EnemyAi` component with three modes:
-- `Pausing { remaining }` — standing still for a short time
-- `Walking { dir, remaining }` — moving in a random direction for ~1.2s
-- `Chasing` — moving directly toward the player at chase speed
+### Combat System (`src/combat.rs`)
+All damage flows through `DamageEvent { target, amount, source }`. Add new `DamageSource` variants (`Ranged`, `Magic`, `AreaOfEffect`, etc.) without touching existing systems.
 
-**Transitions:**
-- Any mode → `Chasing` when `dist_to_player < CHASE_RADIUS`
-- `Chasing` → `Pausing` when `dist_to_player > LOSE_RADIUS`
-- The two-radius hysteresis prevents jitter at the boundary
+- `Facing(Vec2)` — updated each frame from last movement direction; used for melee targeting
+- `player_melee_attack` — `F` key; hits enemies within one tile ahead in facing direction
+- `enemy_contact_damage` — fires `DamageEvent` when enemy and player AABBs overlap, gated by `ContactDamageTimer` (0.8s interval)
+- `apply_damage` — drains `Health`, inserts `Dead`, fires `SplatEvent` with hit position
+- `despawn_dead_enemies` — removes dead enemy entities
 
-**Determinism:** Each enemy gets a unique AI seed derived from the dungeon seed so wander patterns are reproducible. `enemy_ai` runs only in `MapState::Dungeon`.
+### Enemy HP by kind
+| EnemyKind | Max HP |
+|---|---|
+| Goblin | 30 |
+| Orc | 60 |
+| Skeleton | 45 |
+
+### HUD (`src/hud.rs`)
+- **Player health bar** — world-space UI nodes inside a rounded `ImageBundle` container (`ui_panel.png`). White 2px border around a dark-red background. Fill is an `ImageBundle` with a gradient texture built in memory via `Assets<Image>::add()` (no async loading). Gradient swaps: green → yellow → red as HP drops.
+- **Enemy health bars** — world-space sprites (`EnemyBarFor(Entity)` component) that follow each enemy. Always green; shrink to show remaining HP. Tagged `EnemyMarker` for automatic despawn.
+- **Damage splats** — `Text2dBundle` spawned at hit position, rises 28px/s and fades over 0.9s.
+- `BarAssets` resource — holds gradient `Handle<Image>` for all three fill states.
 
 ### State Transitions (Bevy `States`)
-`MapState` derives Bevy's `States` trait. No manual cooldown resource.
-
-- **`stair_detection`** (`Update`): detects player on stair tile, calls `next_state.set(...)`
-- **`despawn_map`** (`OnExit` both states): bulk-despawns `TileMarker` entities
-- **`despawn_enemies`** (`OnExit(Dungeon)`): bulk-despawns `EnemyMarker` entities
-- **`on_enter_hub`** (`OnEnter(Hub)`): spawns hub map, teleports player
-- **`on_enter_dungeon`** (`OnEnter(Dungeon)`): spawns dungeon map, teleports player
-- **`spawn_enemies`** (`OnEnter(Dungeon)`): spawns enemies in all rooms except the last
-- `OnEnter(Hub)` does NOT fire at startup — initial hub is spawned directly in `setup`
+`MapState` derives Bevy's `States` trait. No manual cooldown.
+- `stair_detection` (`Update`): detects player on stair, calls `next_state.set(...)`
+- `despawn_map` / `despawn_enemies` (`OnExit`): bulk-despawn by marker component
+- `on_enter_hub` / `on_enter_dungeon` (`OnEnter`): spawn map, teleport player
+- `spawn_enemies` (`OnEnter(Dungeon)`): 1–2 enemies per room, last room skipped (stairs)
+- `OnEnter(Hub)` does NOT fire at startup — initial hub is spawned in `setup`
 
 ### Seed-Based Generation
-- Dungeon seed: `FIXED_SEED` in `main.rs`, or random `u64` generated at startup
-- Printed to stdout: `Dungeon seed: 12345  (set FIXED_SEED = Some(12345) to replay)`
+- Seed printed to stdout at startup: `Dungeon seed: 12345  (set FIXED_SEED = Some(12345) to replay)`
 - `build_dungeon(seed)` uses `StdRng::seed_from_u64(seed)`
-- Enemy placement uses `seed + 1`; each enemy's wander AI uses a further unique offset
-- Seed stored in `DungeonSeed` resource for future save/load
+- Enemy placement uses `seed + 1`; each enemy's AI uses a further unique offset
+- `DungeonSeed` resource stores the seed for future save/load
 
-### Dungeon Sizing
-`DUNGEON_W=33, DUNGEON_H=18` derived from `floor(1280/TILE) × floor(720/TILE)`. Recalculate if `SCALE` or window resolution changes.
-
-### ECS Components & Resources
-| Name | Type | Purpose |
-|---|---|---|
-| `Player` | Component | Tags the player entity |
-| `TileMarker` | Component | Tags all tile sprites for bulk despawn |
-| `EnemyMarker` | Component | Tags all enemy entities for bulk despawn |
-| `Enemy` | Component | Stores `EnemyKind` on each enemy |
-| `EnemyAi` | Component | Wander/chase state machine + per-enemy RNG |
-| `World` | Resource | Both tilemaps, stair positions, room centres |
-| `DungeonSeed` | Resource | The `u64` seed used for this run |
+### `GameWorld` Resource
+Renamed from `World` to avoid clash with `bevy::prelude::World` (Bevy's ECS world type). Contains both tilemaps, stair positions, and `dungeon_rooms: Vec<RoomInfo>`.
 
 ### Automated Tests (`src/map.rs`)
-14 tests in `#[cfg(test)]` at the bottom of `map.rs`. Run with `cargo test`.
+14 tests in `#[cfg(test)]`. Run with `cargo test`. Covers coordinate round-trips, dungeon invariants, determinism, hub correctness.
 
 ## Asset Pipeline
 
-`generate_assets.py` produces all 32×32 PNGs. Characters are centred on the canvas so the hitbox (`HALF_W = TILE/2`) aligns with the visible sprite.
+`generate_assets.py` (requires Pillow) produces all 32×32 PNGs. Re-run after any sprite changes.
 
-### Tile → Asset Mapping
-| TileKind | File | Solid? |
-|---|---|---|
-| Wall | wall.png | ✅ |
-| Rock | rock.png | ✅ |
-| Water | water.png | ✅ |
-| Stairs | gravel.png | ❌ |
-| Everything else | matching name | ❌ |
+### Generated assets
+| File | Purpose |
+|---|---|
+| `warrior/mage/paladin/rogue.png` | Player class sprites (centred on canvas) |
+| `goblin/orc/skeleton/spider.png` | Enemy sprites |
+| `grass/dirt/stone/wood/water/sand/gravel/rock/wall/door.png` | Tile textures (hand-crafted patterns) |
+| `ui_panel.png` | Dark semi-transparent rounded HUD container |
+| `ui_bar.png` | White rounded rect (used by world-space player bar background) |
+
+### Tile → Solid mapping
+| TileKind | Solid? |
+|---|---|
+| Wall, Rock, Water | ✅ |
+| Everything else | ❌ |
 
 ## Known Issues & Caveats
 
-- **No combat yet**: enemies chase but don't deal or receive damage — Phase 4 continues.
-- **No player health**: health component not yet added.
-- **Enemies don't pathfind**: they move directly toward the player and can get stuck on corners. A simple unstick nudge or proper pathfinding (A*) would help.
-- **Enemies don't respect each other**: no separation — multiple enemies can overlap.
-- **Stair detection uses player centre only**: could miss at high speeds (acceptable for now).
-- **Dungeon sizing tied to window**: `DUNGEON_W/H` must be recalculated if `SCALE` changes.
+- **No player death screen yet** — `Dead` marker is added to the player but no game-over state/UI exists
+- **No ranged/magic attacks** — `DamageSource` has `Ranged`/`Magic` variants, systems not yet added
+- **No inventory or items** — Phase 5
+- **Enemies don't pathfind** — move directly toward player, can get stuck on corners
+- **Enemies don't separate** — multiple enemies can overlap
+- **Dungeon sizing tied to window** — `DUNGEON_W/H` must be recalculated if `SCALE` or resolution changes
+- **No camera scrolling** — dungeon sized to window instead
 
 ## Roadmap (see also PROJECT_STATUS.md)
-7. **Next** — Health components, melee combat, death/despawn
-8. Multiple player classes (sprites ready)
-9. Inventory and item pickups
-10. HUD, sound, save/load
+
+1. **Next** — Player death / game-over screen, ranged/magic attacks
+2. Multiple player classes, inventory, HUD expansion
+3. Sound, save/load, animations, permadeath

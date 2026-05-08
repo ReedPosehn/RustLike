@@ -20,7 +20,7 @@ pub enum MapState {
 /// Holds both maps, their stair positions, and dungeon room data.
 /// Does not store the active state — that is owned by Bevy's `State<MapState>`.
 #[derive(Resource)]
-pub struct World {
+pub struct GameWorld {
     pub hub:            Tilemap,
     pub hub_stairs:     Vec2,
     pub dungeon:        Tilemap,
@@ -30,7 +30,7 @@ pub struct World {
     pub dungeon_rooms:  Vec<RoomInfo>,
 }
 
-impl World {
+impl GameWorld {
     /// Returns the map for the given state.
     pub fn current(&self, state: &MapState) -> &Tilemap {
         match state {
@@ -56,7 +56,7 @@ impl World {
 pub fn stair_detection(
     state:    Res<State<MapState>>,
     mut next: ResMut<NextState<MapState>>,
-    world:    Res<World>,
+    world:    Res<GameWorld>,
     p_query:  Query<&Transform, With<Player>>,
 ) {
     let Ok(transform) = p_query.get_single() else { return };
@@ -82,7 +82,7 @@ pub fn despawn_map(
 
 /// Spawn the hub map and teleport the player on entering Hub state.
 pub fn on_enter_hub(
-    world:       Res<World>,
+    world:       Res<GameWorld>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     p_query:      Query<Entity, With<Player>>,
@@ -98,7 +98,7 @@ pub fn on_enter_hub(
 
 /// Spawn the dungeon map and teleport the player on entering Dungeon state.
 pub fn on_enter_dungeon(
-    world:        Res<World>,
+    world:        Res<GameWorld>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     p_query:      Query<Entity, With<Player>>,
