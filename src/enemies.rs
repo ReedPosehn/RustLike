@@ -71,6 +71,7 @@ pub struct EnemyMarker;
 /// Data component on each enemy entity.
 #[derive(Component)]
 pub struct Enemy {
+    #[allow(dead_code)] // used when per-kind AI behaviours are added
     pub kind: EnemyKind,
 }
 
@@ -90,17 +91,6 @@ impl EnemyAi {
         }
     }
 
-    /// Pick a fresh random unit direction for wandering.
-    fn random_dir(&mut self) -> Vec2 {
-        // Choose from the 8 cardinal + diagonal directions for tile-friendly movement.
-        let dirs = [
-            Vec2::new( 1.0,  0.0), Vec2::new(-1.0,  0.0),
-            Vec2::new( 0.0,  1.0), Vec2::new( 0.0, -1.0),
-            Vec2::new( 1.0,  1.0).normalize(), Vec2::new(-1.0,  1.0).normalize(),
-            Vec2::new( 1.0, -1.0).normalize(), Vec2::new(-1.0, -1.0).normalize(),
-        ];
-        dirs[self.rng.gen_range(0..dirs.len())]
-    }
 }
 
 // ─── spawn / despawn systems ─────────────────────────────────────────────────

@@ -7,8 +7,6 @@ use crate::enemies::EnemyMarker;
 
 /// Seconds between contact damage ticks from enemies touching the player.
 const CONTACT_DAMAGE_INTERVAL: f32 = 0.8;
-/// Damage dealt per melee strike.
-const PLAYER_MELEE_DAMAGE: i32 = 25;
 /// Damage dealt per enemy contact tick.
 const ENEMY_CONTACT_DAMAGE: i32 = 10;
 
@@ -42,11 +40,14 @@ pub struct DamageEvent {
     /// The entity receiving damage.
     pub target: Entity,
     pub amount: i32,
+    #[allow(dead_code)] // kept for future damage-type filtering and logging
     pub source: DamageSource,
 }
 
 /// How the damage was dealt. Extend this enum to add new mechanics.
+/// Variants beyond `Melee` and `Contact` are stubs for future attack types.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum DamageSource {
     Melee,
     Ranged,
@@ -138,26 +139,24 @@ pub fn update_facing(
 /// Any enemy whose centre falls within that tile receives melee damage.
 pub fn player_melee_attack(
     keyboard:   Res<Input<KeyCode>>,
-    p_query:    Query<(&Transform, &Facing), With<Player>>,
+    p_query:    Query<(&Transform, &Facing, &crate::character_select::PlayerClass), With<Player>>,
     e_query:    Query<(Entity, &Transform), (With<EnemyMarker>, Without<Dead>)>,
     mut events: EventWriter<DamageEvent>,
 ) {
     if !keyboard.just_pressed(KeyCode::F) { return; }
 
-    let Ok((p_transform, facing)) = p_query.get_single() else { return };
+    let Ok((p_transform, facing, class)) = p_query.get_single() else { return };
     if facing.0 == Vec2::ZERO { return; }
 
-    let player_pos = p_transform.translation.truncate();
-    // Centre of the tile directly ahead of the player.
+    let player_pos    = p_transform.translation.truncate();
     let target_centre = player_pos + facing.0 * TILE;
 
     for (entity, e_transform) in &e_query {
         let enemy_pos = e_transform.translation.truncate();
-        // Hit if the enemy centre is within one tile's reach of the target point.
         if enemy_pos.distance(target_centre) < TILE {
             events.send(DamageEvent {
                 target: entity,
-                amount: PLAYER_MELEE_DAMAGE,
+                amount: class.melee_damage(),
                 source: DamageSource::Melee,
             });
         }

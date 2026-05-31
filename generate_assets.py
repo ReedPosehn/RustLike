@@ -3,6 +3,7 @@
 Generate pixel art sprites for RustLike — all characters centred on 32x32 canvas.
 Requires: pip install pillow
 """
+
 from PIL import Image, ImageDraw
 import os
 
@@ -241,6 +242,44 @@ for r2 in [6, 7, 24, 25]:
     for i in range(24, 28):
         SP[r2][i] = BLACK
 save_sprite("assets/spider.png", SP)
+
+# ── Gravestone ────────────────────────────────────────────────────────────────
+GS1 = (90, 90, 90, 255)  # mid gray
+GS2 = (60, 60, 60, 255)  # dark gray
+GSD = (139, 90, 43, 255)  # dirt/brown base
+
+grave = [[T] * 32 for _ in range(32)]
+# Stone body: cols 10-21, rows 4-22
+for r in range(4, 23):
+    for c in range(10, 22):
+        grave[r][c] = GS1
+# Rounded top (rows 4-7 trimmed to arc shape)
+for c in [10, 11, 20, 21]:
+    grave[4][c] = T
+for c in [10, 20]:
+    grave[5][c] = T
+# Dark border
+for r in range(5, 23):
+    grave[r][10] = GS2
+    grave[r][21] = GS2
+for c in range(10, 22):
+    grave[22][c] = GS2
+    grave[4][c] = GS2 if c not in [10, 11, 20, 21] else T
+# Cross: vertical
+for r in range(8, 19):
+    grave[r][15] = GS2
+    grave[r][16] = GS2
+# Cross: horizontal
+for c in range(12, 20):
+    grave[11][c] = GS2
+    grave[12][c] = GS2
+# Base / mound
+for r in range(23, 27):
+    lo = max(8, 10 - (r - 23))
+    hi = min(23, 22 + (r - 23))
+    for c in range(lo, hi):
+        grave[r][c] = GSD
+save_sprite("assets/gravestone.png", grave)
 
 # ── TILES — original hand-crafted patterns ───────────────────────────────────
 # Colors shared with character sprites above

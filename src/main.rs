@@ -7,11 +7,13 @@ mod state;
 mod enemies;
 mod combat;
 mod hud;
+mod game_over;
+mod character_select;
 
 use map::{build_hub, build_dungeon, spawn_map};
 use player::{spawn_player, player_movement};
 use state::{
-    MapState, GameWorld,
+    AppState, MapState, GameWorld, LastDeathInfo,
     stair_detection, despawn_map, on_enter_hub, on_enter_dungeon,
 };
 use enemies::{spawn_enemies, despawn_enemies, enemy_ai};
@@ -22,6 +24,11 @@ use combat::{
     enemy_contact_damage,
 };
 use hud::{setup_hud, update_health_bar, sync_enemy_bars, handle_splat_events, update_damage_splats};
+use game_over::{check_player_death, setup_game_over, cleanup_game_over, handle_respawn_input};
+use character_select::{
+    PlayerClass, SelectedClass,
+    setup_character_select, cleanup_character_select, handle_class_input,
+};
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -32,9 +39,9 @@ pub const TILE:    f32 = TILE_PX * SCALE; // 38.4
 pub const HALF_W: f32 = TILE / 2.0;
 pub const HALF_H: f32 = TILE / 2.0;
 
-pub const SPEED: f32 = 150.0;
+/// Base movement speed used by enemies. Player speed is driven by `PlayerClass::speed()`.
+pub const ENEMY_SPEED: f32 = 150.0;
 
-// Dungeon sized to fit exactly in 1280×720 at TILE=38.4.
 pub const DUNGEON_W: usize = 33;
 pub const DUNGEON_H: usize = 18;
 
@@ -65,43 +72,67 @@ fn main() {
         }))
         .insert_resource(GameWorld { hub, hub_stairs, dungeon, dungeon_stairs, dungeon_rooms })
         .insert_resource(DungeonSeed(seed))
+        .insert_resource(LastDeathInfo::default())
+        .insert_resource(PlayerClass::default())
+        .insert_resource(SelectedClass::default())
         .add_event::<DamageEvent>()
         .add_event::<SplatEvent>()
+        // States
+        .add_state::<AppState>()
         .add_state::<MapState>()
-        // Map lifecycle
+        // ── Character select ────────────────────────────────────────────────
+        .add_systems(OnEnter(AppState::CharacterSelect), setup_character_select)
+        .add_systems(OnExit(AppState::CharacterSelect),  cleanup_character_select)
+        .add_systems(Update, handle_class_input.run_if(in_state(AppState::CharacterSelect)))
+        // ── Map lifecycle ───────────────────────────────────────────────────
         .add_systems(OnExit(MapState::Hub),      despawn_map)
         .add_systems(OnExit(MapState::Dungeon),  despawn_map)
         .add_systems(OnEnter(MapState::Hub),     on_enter_hub)
         .add_systems(OnEnter(MapState::Dungeon), (on_enter_dungeon, spawn_enemies))
-        // Enemy lifecycle
+        // ── Enemy lifecycle ─────────────────────────────────────────────────
         .add_systems(OnExit(MapState::Dungeon),  despawn_enemies)
-        // Startup
-        .add_systems(Startup, (setup, setup_hud))
-        // Update — always active
+        // ── Game over lifecycle ─────────────────────────────────────────────
+        .add_systems(OnEnter(AppState::GameOver), setup_game_over)
+        .add_systems(OnExit(AppState::GameOver),  cleanup_game_over)
+        // ── Player spawn (after class is chosen) ───────────────────────────
+        .add_systems(OnEnter(AppState::Playing), spawn_player)
+        // ── Startup (camera + HUD only; no player yet) ──────────────────────
+        .add_systems(Startup, (setup_camera, setup_hud, setup_hub_map))
+        // ── Update — only while playing ─────────────────────────────────────
         .add_systems(Update, (
             player_movement,
             stair_detection,
             update_facing,
             apply_damage,
+            check_player_death,
             update_health_bar,
             handle_splat_events,
             update_damage_splats,
             sync_enemy_bars,
-        ))
-        // Update — dungeon only
+        ).run_if(in_state(AppState::Playing)))
+        // ── Update — dungeon only ────────────────────────────────────────────
         .add_systems(Update, (
             enemy_ai,
             player_melee_attack,
             enemy_contact_damage,
             despawn_dead_enemies,
         ).run_if(in_state(MapState::Dungeon)))
+        // ── Update — game over ───────────────────────────────────────────────
+        .add_systems(Update, handle_respawn_input.run_if(in_state(AppState::GameOver)))
         .run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>, world: Res<GameWorld>) {
+/// Spawn the camera and nothing else — player spawns after class selection.
+fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
-    spawn_map(&mut commands, &asset_server, &world.hub);
+}
 
-    let start = world.hub.tile_center(10, 7);
-    spawn_player(&mut commands, &asset_server, start);
+/// Spawn the initial hub map at startup so it's visible behind the class
+/// select screen.
+fn setup_hub_map(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    world:        Res<GameWorld>,
+) {
+    spawn_map(&mut commands, &asset_server, &world.hub);
 }
