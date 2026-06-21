@@ -1,6 +1,6 @@
 # RustLike
 
-A top-down roguelike prototype in Rust using the Bevy engine. Features procedural seeded dungeons, four playable classes, real-time enemy AI, melee combat, and a gradient HUD.
+A top-down roguelike prototype in Rust using the Bevy engine. Features procedural seeded dungeons, four playable classes, real-time enemy AI, melee + ranged/magic combat, and a gradient HUD with a pause menu.
 
 ## Getting Started
 
@@ -22,19 +22,21 @@ To replay a dungeon: copy the seed printed at startup and set `FIXED_SEED = Some
 | Key | Action |
 |---|---|
 | WASD / Arrows | Move |
-| F | Melee attack (hits tile in movement direction) |
+| F | Melee attack (facing direction) |
+| SPACE | Ranged / magic attack (facing direction) |
+| ESC | Pause / resume |
 | ← → on class screen | Browse classes |
 | ENTER / SPACE | Confirm class selection / Respawn |
 | Walk onto stairs | Enter / exit dungeon |
 
 ## Classes
 
-| Class | HP | ATK | Speed |
-|---|---|---|---|
-| Warrior | 100 | 25 | 150 |
-| Mage | 70 | 15 | 130 |
-| Paladin | 140 | 20 | 120 |
-| Rogue | 80 | 20 | 190 |
+| Class | HP | Melee | Ranged | Speed | Attack Type |
+|---|---|---|---|---|---|
+| Warrior | 100 | 25 | 12 | 150 | Arrow |
+| Mage | 70 | 15 | 30 | 130 | Magic bolt |
+| Paladin | 140 | 20 | 10 | 120 | Arrow |
+| Rogue | 80 | 20 | 18 | 190 | Arrow |
 
 ## Source Layout
 
@@ -47,18 +49,21 @@ src/
 ├── character_select.rs # class selection screen
 ├── enemies.rs          # enemy AI and spawning
 ├── combat.rs           # health, damage events, melee
+├── projectile.rs       # ranged/magic attacks
 ├── hud.rs              # health bars, damage splats
-└── game_over.rs        # death screen, respawn, gravestone
+├── game_over.rs        # death screen, respawn, gravestone
+└── pause.rs            # pause menu, controls reference
 ```
 
 ## Features
 
 - Procedural seeded dungeons — reproducible with `FIXED_SEED`
-- 4 playable classes with unique stats
+- 4 playable classes with unique stats and attack styles
 - Real-time wander/chase enemy AI with wall collision
-- Melee combat (class-based damage) + enemy contact damage
-- Gradient health bar (green → yellow → red), enemy HP bars, damage splats
+- Melee combat (F) and ranged/magic combat (SPACE), both class-based damage
+- Gradient health bar, enemy HP bars, floating damage numbers
 - Death screen with gold-loss display; gravestone appears in the next dungeon
+- Pause menu with a controls reference and options stub
 - 14 automated tests for map generation and coordinate math
 
 ## Roadmap
@@ -66,19 +71,17 @@ src/
 ### ✅ Phase 1–3 — Foundation
 Modules, Bevy States, seeded generation, automated tests
 
-### ⚔️ Phase 4 — Enemies & Combat (in progress)
-- ✅ Enemy spawning + wander/chase AI
-- ✅ Health system, melee, contact damage
-- ✅ HUD: gradient bar, enemy bars, damage splats
-- ✅ Death screen, respawn, gravestone stub
-- ✅ Player class selection
-- ⬜ Ranged / magic attacks
+### ⚔️ Phase 4 — Enemies & Combat (complete)
+Enemy AI, health system, melee + ranged/magic attacks, HUD, death/respawn, class selection, pause menu
 
-### 🎮 Phase 5 — Gameplay Mechanics
-Inventory, item drops, dungeon depth, keys/locks
+### 🎮 Phase 5 — Gameplay Mechanics (next)
+- Difficulty selector (permadeath vs. respawn)
+- Inventory and item pickup
+- Dungeon depth and difficulty scaling
+- Keys, locks, themed rooms
 
 ### ✨ Phase 6 — Polish
-Sound, save/load, animations, permadeath, camera scrolling
+Sound, save/load, animations, interactive pause options, camera scrolling
 
 ## Project Status
 

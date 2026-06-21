@@ -281,6 +281,25 @@ for r in range(23, 27):
         grave[r][c] = GSD
 save_sprite("assets/gravestone.png", grave)
 
+# ── Projectiles ──────────────────────────────────────────────────────────────
+# Arrow — physical ranged attack. Drawn pointing right; rotated at runtime
+# to match the player's facing direction.
+arrow_img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+ad = ImageDraw.Draw(arrow_img)
+ad.line([(2, 16), (22, 16)], fill=(170, 130, 80, 255), width=4)
+ad.polygon([(20, 9), (30, 16), (20, 23)], fill=(210, 210, 210, 255))
+arrow_img.save("assets/arrow.png")
+print("✓  assets/arrow.png")
+
+# Magic bolt — arcane ranged attack. Glowing purple orb, rotation-agnostic.
+bolt_img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+bd = ImageDraw.Draw(bolt_img)
+bd.ellipse([6, 6, 26, 26], fill=(150, 60, 220, 220))
+bd.ellipse([11, 11, 21, 21], fill=(210, 160, 255, 255))
+bd.ellipse([14, 14, 18, 18], fill=(245, 230, 255, 255))
+bolt_img.save("assets/magic_bolt.png")
+print("✓  assets/magic_bolt.png")
+
 # ── TILES — original hand-crafted patterns ───────────────────────────────────
 # Colors shared with character sprites above
 DG = (50, 120, 50, 255)  # dark green

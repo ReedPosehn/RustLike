@@ -12,6 +12,16 @@ pub enum PlayerClass {
     Rogue,
 }
 
+// ─── attack kind ──────────────────────────────────────────────────────────────
+
+/// Whether a class's ranged attack (Space key) is physical or arcane.
+/// Determines projectile sprite and `DamageSource`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttackKind {
+    Ranged,
+    Magic,
+}
+
 impl PlayerClass {
     pub const ALL: [PlayerClass; 4] = [
         PlayerClass::Warrior,
@@ -53,6 +63,24 @@ impl PlayerClass {
             PlayerClass::Mage    => 15,
             PlayerClass::Paladin => 20,
             PlayerClass::Rogue   => 20,
+        }
+    }
+
+    /// Damage dealt by the Space-key ranged/magic attack.
+    pub fn ranged_damage(self) -> i32 {
+        match self {
+            PlayerClass::Warrior => 12,
+            PlayerClass::Mage    => 30,
+            PlayerClass::Paladin => 10,
+            PlayerClass::Rogue   => 18,
+        }
+    }
+
+    /// Mage casts magic; everyone else fires a physical projectile.
+    pub fn attack_kind(self) -> AttackKind {
+        match self {
+            PlayerClass::Mage => AttackKind::Magic,
+            _                 => AttackKind::Ranged,
         }
     }
 
@@ -221,7 +249,7 @@ fn spawn_class_card(
 
             // Stats
             card.spawn(TextBundle::from_section(
-                format!("HP  {}\nATK {}\nSPD {:.0}", class.max_hp(), class.melee_damage(), class.speed()),
+                format!("HP  {}\nMEL {}\nRNG {}\nSPD {:.0}", class.max_hp(), class.melee_damage(), class.ranged_damage(), class.speed()),
                 TextStyle {
                     font_size: 15.0,
                     color:     Color::rgb(0.70, 0.70, 0.70),

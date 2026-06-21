@@ -9,6 +9,8 @@ mod combat;
 mod hud;
 mod game_over;
 mod character_select;
+mod projectile;
+mod pause;
 
 use map::{build_hub, build_dungeon, spawn_map};
 use player::{spawn_player, player_movement};
@@ -29,6 +31,8 @@ use character_select::{
     PlayerClass, SelectedClass,
     setup_character_select, cleanup_character_select, handle_class_input,
 };
+use projectile::{fire_ranged_attack, update_projectiles, despawn_projectiles};
+use pause::{toggle_pause_on_escape, handle_pause_input, setup_pause_menu, cleanup_pause_menu};
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -91,9 +95,15 @@ fn main() {
         .add_systems(OnEnter(MapState::Dungeon), (on_enter_dungeon, spawn_enemies))
         // ── Enemy lifecycle ─────────────────────────────────────────────────
         .add_systems(OnExit(MapState::Dungeon),  despawn_enemies)
+        .add_systems(OnExit(MapState::Dungeon),  despawn_projectiles)
         // ── Game over lifecycle ─────────────────────────────────────────────
         .add_systems(OnEnter(AppState::GameOver), setup_game_over)
         .add_systems(OnExit(AppState::GameOver),  cleanup_game_over)
+        // ── Pause lifecycle ─────────────────────────────────────────────────
+        .add_systems(OnEnter(AppState::Paused), setup_pause_menu)
+        .add_systems(OnExit(AppState::Paused),  cleanup_pause_menu)
+        .add_systems(Update, toggle_pause_on_escape.run_if(in_state(AppState::Playing)))
+        .add_systems(Update, handle_pause_input.run_if(in_state(AppState::Paused)))
         // ── Player spawn (after class is chosen) ───────────────────────────
         .add_systems(OnEnter(AppState::Playing), spawn_player)
         // ── Startup (camera + HUD only; no player yet) ──────────────────────
@@ -110,13 +120,17 @@ fn main() {
             update_damage_splats,
             sync_enemy_bars,
         ).run_if(in_state(AppState::Playing)))
-        // ── Update — dungeon only ────────────────────────────────────────────
+        // ── Update — dungeon only (and only while actually playing, not on
+        //    the game-over screen — dying doesn't change MapState, only
+        //    AppState, so both conditions are required) ───────────────────────
         .add_systems(Update, (
             enemy_ai,
             player_melee_attack,
             enemy_contact_damage,
             despawn_dead_enemies,
-        ).run_if(in_state(MapState::Dungeon)))
+            fire_ranged_attack,
+            update_projectiles,
+        ).run_if(in_state(MapState::Dungeon).and_then(in_state(AppState::Playing))))
         // ── Update — game over ───────────────────────────────────────────────
         .add_systems(Update, handle_respawn_input.run_if(in_state(AppState::GameOver)))
         .run();

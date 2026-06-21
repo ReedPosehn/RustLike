@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::{TILE, HALF_W, HALF_H};
 use crate::player::Player;
-use crate::enemies::EnemyMarker;
+use crate::enemies::Enemy;
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -108,13 +108,24 @@ pub fn apply_damage(
     }
 }
 
-/// Despawns any entity tagged `Dead` on the enemy side.
+/// Despawns any entity tagged `Dead` on the enemy side, along with its
+/// associated health bar sprites (which are separate entities tracked via
+/// `EnemyBarFor` — they don't get `Dead` themselves, so without this they'd
+/// be left behind, frozen at the enemy's last position).
 /// Player death is handled separately (game-over screen).
 pub fn despawn_dead_enemies(
-    query:        Query<Entity, (With<Dead>, With<EnemyMarker>)>,
+    dead_query:   Query<Entity, (With<Dead>, With<Enemy>)>,
+    bar_query:    Query<(Entity, &crate::hud::EnemyBarFor)>,
     mut commands: Commands,
 ) {
-    for e in &query { commands.entity(e).despawn(); }
+    for dead_entity in &dead_query {
+        commands.entity(dead_entity).despawn();
+        for (bar_entity, bar_for) in &bar_query {
+            if bar_for.0 == dead_entity {
+                commands.entity(bar_entity).despawn();
+            }
+        }
+    }
 }
 
 /// Updates the player's `Facing` component from the last movement direction.
@@ -140,7 +151,7 @@ pub fn update_facing(
 pub fn player_melee_attack(
     keyboard:   Res<Input<KeyCode>>,
     p_query:    Query<(&Transform, &Facing, &crate::character_select::PlayerClass), With<Player>>,
-    e_query:    Query<(Entity, &Transform), (With<EnemyMarker>, Without<Dead>)>,
+    e_query:    Query<(Entity, &Transform), (With<Enemy>, Without<Dead>)>,
     mut events: EventWriter<DamageEvent>,
 ) {
     if !keyboard.just_pressed(KeyCode::F) { return; }
@@ -168,7 +179,7 @@ pub fn player_melee_attack(
 /// instant kills on contact.
 pub fn enemy_contact_damage(
     time:       Res<Time>,
-    e_query:    Query<&Transform, (With<EnemyMarker>, Without<Dead>)>,
+    e_query:    Query<&Transform, (With<Enemy>, Without<Dead>)>,
     mut p_query: Query<(Entity, &Transform, &mut ContactDamageTimer), With<Player>>,
     mut events: EventWriter<DamageEvent>,
 ) {

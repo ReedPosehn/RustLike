@@ -13,6 +13,7 @@ pub enum AppState {
     #[default]
     CharacterSelect,
     Playing,
+    Paused,
     GameOver,
 }
 

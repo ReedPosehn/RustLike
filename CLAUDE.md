@@ -4,7 +4,7 @@ This file gives Claude context about the project so it can assist effectively.
 
 ## Project Overview
 
-RustLike is a top-down roguelike prototype in Rust using Bevy 0.11. Features: procedural seeded dungeons, AABB movement, real-time enemy AI, melee combat, character class selection, player death/respawn with gravestone, and a gradient HUD.
+RustLike is a top-down roguelike prototype in Rust using Bevy 0.11. Features: procedural seeded dungeons, AABB movement, real-time enemy AI, melee + ranged/magic combat, character class selection, player death/respawn with gravestone, a gradient HUD, and a pause menu.
 
 **Modules in `src/`:**
 | File | Purpose |
@@ -13,11 +13,13 @@ RustLike is a top-down roguelike prototype in Rust using Bevy 0.11. Features: pr
 | `map.rs` | `TileKind`, `Tilemap`, `RoomInfo`, builders, `spawn_map`, `TileMarker`, tests |
 | `player.rs` | `Player`, `spawn_player`, `player_movement` |
 | `state.rs` | `AppState`, `MapState`, `GameWorld`, `LastDeathInfo`, transition systems |
-| `character_select.rs` | `PlayerClass`, class selection screen, input handling |
+| `character_select.rs` | `PlayerClass`, `AttackKind`, class selection screen |
 | `enemies.rs` | `EnemyKind`, `Enemy`, `EnemyAi`, spawn/despawn/AI |
 | `combat.rs` | `Health`, `Dead`, `Facing`, `DamageEvent`, `SplatEvent`, combat systems |
+| `projectile.rs` | `Projectile`, ranged/magic attack firing and movement |
 | `hud.rs` | `BarAssets`, gradient health bar, enemy bars, damage splats |
 | `game_over.rs` | `Gold`, game-over screen, respawn logic |
+| `pause.rs` | Pause menu, controls reference, options stub |
 
 ## Build & Run
 
@@ -32,17 +34,21 @@ To replay a specific dungeon: set `FIXED_SEED = Some(n)` in `main.rs`.
 ## Application State Flow
 
 ```
-CharacterSelect  →  Playing  →  GameOver  →  Playing (respawn)
-                                   ↑ keeps MapState::Hub after respawn
+CharacterSelect → Playing ⇄ Paused
+                     ↓
+                  GameOver → Playing (respawn, new seed)
 ```
 
 - **`CharacterSelect`** (default) — class select screen over the hub map
 - **`Playing`** — all gameplay systems active
+- **`Paused`** — Esc toggles from `Playing`; freezes gameplay, shows controls reference + options stub
 - **`GameOver`** — overlay pauses gameplay; SPACE to respawn
 
 **`MapState`** (sub-state, only meaningful in `Playing`):
 - `Hub` (default) — hub map active
 - `Dungeon` — dungeon map active, enemies alive
+
+**Important gating pattern:** dungeon-only combat systems (`enemy_ai`, `player_melee_attack`, `enemy_contact_damage`, `fire_ranged_attack`, `update_projectiles`, `despawn_dead_enemies`) require **both** `in_state(MapState::Dungeon)` **and** `in_state(AppState::Playing)` via `.and_then(...)`. This matters because dying or pausing only changes `AppState`, not `MapState` — without the combined condition, enemies/projectiles would keep acting during the game-over or pause screen.
 
 ## Key Constants (`src/main.rs`)
 | Constant | Value | Purpose |
@@ -56,14 +62,25 @@ CharacterSelect  →  Playing  →  GameOver  →  Playing (respawn)
 | `FIXED_SEED` | `Option<u64>` | Pin dungeon layout for testing |
 
 ## Player Classes (`src/character_select.rs`)
-| Class | HP | ATK | Speed | Notes |
-|---|---|---|---|---|
-| Warrior | 100 | 25 | 150 | Balanced melee |
-| Mage | 70 | 15 | 130 | Low HP; ranged stub |
-| Paladin | 140 | 20 | 120 | Tank; slowest |
-| Rogue | 80 | 20 | 190 | Fastest movement |
+| Class | HP | Melee | Ranged | Speed | Attack Kind |
+|---|---|---|---|---|---|
+| Warrior | 100 | 25 | 12 | 150 | Ranged (arrow) |
+| Mage | 70 | 15 | 30 | 130 | Magic (bolt) |
+| Paladin | 140 | 20 | 10 | 120 | Ranged (arrow) |
+| Rogue | 80 | 20 | 18 | 190 | Ranged (arrow) |
 
-`PlayerClass` is both a `Resource` (chosen class) and a `Component` on the player entity. `player_movement` reads speed from it; `player_melee_attack` reads damage from it.
+`PlayerClass` is both a `Resource` (chosen class) and a `Component` on the player entity. `player_movement` reads speed from it; `player_melee_attack` and `fire_ranged_attack` read damage from it. Only Mage uses `AttackKind::Magic` (purple bolt); the rest fire a physical arrow.
+
+## Controls
+| Key | Action |
+|---|---|
+| WASD / Arrows | Move |
+| F | Melee attack (facing direction) |
+| SPACE | Ranged/magic attack (facing direction) |
+| ESC | Pause / resume |
+| ← → or A/D (CharacterSelect) | Browse classes |
+| ENTER / SPACE (CharacterSelect) | Confirm class |
+| SPACE (GameOver) | Respawn |
 
 ## Tilemap Coordinate System
 - Row 0 = bottom, col 0 = left. Y-up matching Bevy world space.
@@ -71,40 +88,44 @@ CharacterSelect  →  Playing  →  GameOver  →  Playing (respawn)
 - Inverse: `col = floor(px / TILE + w/2)` — **no TILE/2 offset** (adding it shifts the grid by half a tile and breaks collision).
 
 ## Collision (AABB)
-`Anchor::Center` — translation = sprite centre. Both player and enemies use the same two-corner leading-face probes:
-- X: `(face_x, py ± (HALF_H - 1))`
-- Y: `(px ± (HALF_W - 1), face_y)`
-Axes independent → wall sliding. Out-of-bounds = solid.
+`Anchor::Center` — translation = sprite centre. Player and enemies use two-corner leading-face probes on independent X/Y axes (wall sliding). Out-of-bounds = solid.
 
-## Combat (`src/combat.rs`)
-All damage flows through `DamageEvent { target, amount, source }`. `DamageSource` variants: `Melee`, `Contact`, `Ranged`*, `Magic`*, `AreaOfEffect`* (* = stubs for future systems). `apply_damage` drains HP, inserts `Dead`, fires `SplatEvent` for floating numbers.
+## Combat (`src/combat.rs`, `src/projectile.rs`)
+All damage flows through `DamageEvent { target, amount, source }`. `DamageSource`: `Melee`, `Contact`, `Ranged`, `Magic`, `AreaOfEffect`* (* = stub). `apply_damage` drains HP, inserts `Dead`, fires `SplatEvent`.
+
+**Targeting bug fixed:** enemy queries used to filter by `EnemyMarker`, which is *also* tagged on the enemy health bar sprites (so they could be a silent miss target). All combat-targeting queries (`player_melee_attack`, `enemy_contact_damage`, `projectile` hit detection, `despawn_dead_enemies`) now filter by the `Enemy` component instead, which only exists on the real enemy entity.
+
+**Projectiles** (`projectile.rs`): `fire_ranged_attack` (SPACE) spawns a sprite ahead of the player, rotated to face direction. `update_projectiles` is a single combined system — movement, wall collision, enemy collision, lifetime expiry all in one pass, so an entity is never double-despawned by separate systems racing. `despawn_projectiles` runs on `OnExit(MapState::Dungeon)` to clean up any in-flight projectile when leaving the dungeon (by stairs or by dying) — without this they'd freeze on screen forever since their own update system stops running outside Dungeon+Playing.
+
+**Dead enemy cleanup:** `despawn_dead_enemies` now also despawns any `EnemyBarFor`-tagged health bar entities tracking the dead enemy — previously the bars were separate entities that never received `Dead` themselves, so they were left behind frozen at the enemy's last position.
 
 ## Enemy AI (`src/enemies.rs`)
-`EnemyAi` state machine: `Pausing` → `Walking` → `Chasing`. Chase triggered at 5 tiles, lost at 7 (hysteresis). Uses same AABB collision as player. Per-enemy seeded RNG. Only runs in `MapState::Dungeon`.
+`EnemyAi` state machine: `Pausing` → `Walking` → `Chasing`. Chase at 5 tiles, lose at 7 (hysteresis). Same AABB collision as player. Per-enemy seeded RNG. Only runs in `MapState::Dungeon` (and now also gated to `AppState::Playing`, see above).
 
 ## HUD (`src/hud.rs`)
-- **Player bar** — gradient fill built in memory (`Assets<Image>::add()`), no async loading. Green→yellow→red as HP drops. 2px white border, rounded dark panel (`ui_panel.png`).
-- **Enemy bars** — world-space sprites above each enemy; always green, shrink to show damage.
-- **Damage splats** — yellow `-N` text, rises 28px/s, fades over 0.9s.
-- `BarAssets` resource holds prebuilt gradient `Handle<Image>` handles.
+- **Player bar** — gradient fill built in memory (`Assets<Image>::add()`, no async load). Green→yellow→red. 2px white border, rounded dark panel.
+- **Enemy bars** — world-space sprites; always green, shrink to show damage; properly cleaned up on enemy death (see Combat above).
+- **Damage splats** — yellow `-N` text, rises and fades.
 
 ## Death & Respawn (`src/game_over.rs`)
-- `check_player_death` detects `Dead` on player → records `LastDeathInfo { gold_lost, seed }` → `AppState::GameOver`
-- `setup_game_over` — dark overlay, "YOU DIED", gold lost, SPACE prompt
-- `handle_respawn_input` — generates new seed, rebuilds dungeon in `GameWorld`, restores HP to `class.max_hp()`, removes `Dead`, transitions `MapState::Hub` + `AppState::Playing`
-- `spawn_player` guards against duplicate spawns (returns early if `Player` entity exists)
-- Gravestone spawned in first room of the NEW dungeon on `on_enter_dungeon` when `LastDeathInfo.seed > 0`
+- `check_player_death` → `LastDeathInfo { gold_lost, seed }` → `AppState::GameOver`
+- `handle_respawn_input` — new seed, rebuild dungeon, restore HP to `class.max_hp()`, remove `Dead`, → `MapState::Hub` + `AppState::Playing`
+- `spawn_player` guards against duplicate spawns (checks for existing `Player` entity)
+- Gravestone spawns in first room of the new dungeon when `LastDeathInfo.seed > 0`
+
+## Pause Menu (`src/pause.rs`)
+Two one-directional systems (`toggle_pause_on_escape` in `Playing`, `handle_pause_input` in `Paused`) rather than a single toggle — avoids any chance of double-firing in one frame. Shows a controls reference (two-column flexbox layout — Bevy's default font isn't monospace so text padding wouldn't align) and a grayed-out options stub (Volume, Difficulty). Because all gameplay systems are gated by `AppState::Playing`, pausing required no changes to any existing system — they simply stop running.
 
 ## Seed System
-Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource stores current seed. Enemy placement uses `seed + 1`; each enemy AI uses a further unique offset. New seed generated on each respawn.
+Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource stores current seed. Enemy placement uses `seed + 1`. New seed generated on each respawn.
 
 ## Known Issues & Caveats
-- **No ranged/magic attacks** — `DamageSource` variants exist, systems not yet built
 - **No inventory or items** — `Gold(u32)` stubbed at 0 on player
 - **Enemies don't pathfind** — straight-line chase, can get stuck on corners
 - **Enemies overlap each other** — no separation logic
 - **Dungeon dimensions** must be recalculated if `SCALE` or resolution changes
 - **No camera scrolling** — dungeon sized to window
+- **Pause options are visual stubs only** — Volume and Difficulty are not yet interactive
 
 ## Roadmap
 1. Modular codebase, Bevy States, seeds, tests (Phase 3)
@@ -112,4 +133,7 @@ Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource s
 3. Gradient HUD, enemy health bars, damage splats
 4. Player death / game-over / gravestone stub
 5. Player class selection (Warrior, Mage, Paladin, Rogue)
-6. **Next** — Ranged/magic attacks; inventory stub; dungeon depth
+6. Ranged/magic attacks (SPACE), class-based projectile type
+7. Pause menu with controls reference + options stub
+8. **Planned** — Difficulty selector (permadeath vs. standard respawn), likely a state between `CharacterSelect` and `Playing`, with the toggle surfaced in the pause menu's Options stub too
+9. **Next** — Inventory stub, dungeon depth/difficulty scaling
