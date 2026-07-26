@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::state::AppState;
+use crate::difficulty::Difficulty;
 
 // ─── marker ──────────────────────────────────────────────────────────────────
 
@@ -33,16 +34,28 @@ pub fn handle_pause_input(
 
 // ─── UI ──────────────────────────────────────────────────────────────────────
 
-const CONTROLS: [(&str, &str); 6] = [
+const CONTROLS: [(&str, &str); 7] = [
     ("WASD / Arrows", "Move"),
     ("F",             "Melee attack"),
     ("SPACE",         "Ranged / magic attack"),
     ("ESC",           "Pause / resume"),
     ("Walk onto stairs", "Enter / exit dungeon"),
     ("SPACE (game over)", "Respawn"),
+    ("TAB (paused)",  "Toggle difficulty"),
 ];
 
-pub fn setup_pause_menu(mut commands: Commands) {
+pub fn setup_pause_menu(mut commands: Commands, difficulty: Res<Difficulty>) {
+    build_pause_menu(&mut commands, *difficulty);
+}
+
+/// Builds the full pause-menu UI tree. Shared by `setup_pause_menu` and the
+/// options toggle, which despawns and rebuilds the whole tree on TAB — same
+/// rebuild-on-change pattern `character_select::handle_class_input` uses,
+/// since Bevy 0.11 doesn't clean up a parent's `Children` list when a single
+/// child is despawned with plain `despawn()` (only `despawn_recursive`), so
+/// swapping just the difficulty line in place would leave a dangling
+/// reference and panic the UI clipping system.
+fn build_pause_menu(commands: &mut Commands, difficulty: Difficulty) {
     commands
         .spawn((
             NodeBundle {
@@ -134,7 +147,7 @@ pub fn setup_pause_menu(mut commands: Commands) {
                 });
             });
 
-            // ── Options stub ────────────────────────────────────────────────
+            // ── Options ─────────────────────────────────────────────────────
             root.spawn(NodeBundle {
                 style: Style {
                     flex_direction: FlexDirection::Column,
@@ -156,8 +169,8 @@ pub fn setup_pause_menu(mut commands: Commands) {
                     TextStyle { font_size: 15.0, color: Color::rgb(0.50, 0.50, 0.50), ..Default::default() },
                 ));
                 panel.spawn(TextBundle::from_section(
-                    "Difficulty     — coming soon (permadeath vs. respawn)",
-                    TextStyle { font_size: 15.0, color: Color::rgb(0.50, 0.50, 0.50), ..Default::default() },
+                    difficulty_line_text(difficulty),
+                    TextStyle { font_size: 15.0, color: Color::rgb(0.75, 0.75, 0.75), ..Default::default() },
                 ));
             });
 
@@ -173,4 +186,27 @@ pub fn cleanup_pause_menu(
     mut commands: Commands,
 ) {
     for e in &query { commands.entity(e).despawn_recursive(); }
+}
+
+fn difficulty_line_text(difficulty: Difficulty) -> String {
+    format!("Difficulty: {}   (TAB to change)", difficulty.display_name())
+}
+
+/// TAB while paused — flips the `Difficulty` resource and rebuilds the pause
+/// menu so the Options panel reflects the new value.
+pub fn handle_pause_options_input(
+    keyboard:       Res<Input<KeyCode>>,
+    mut difficulty: ResMut<Difficulty>,
+    ui_query:       Query<Entity, With<PauseUi>>,
+    mut commands:   Commands,
+) {
+    if !keyboard.just_pressed(KeyCode::Tab) { return; }
+
+    *difficulty = match *difficulty {
+        Difficulty::Standard   => Difficulty::Permadeath,
+        Difficulty::Permadeath => Difficulty::Standard,
+    };
+
+    for e in &ui_query { commands.entity(e).despawn_recursive(); }
+    build_pause_menu(&mut commands, *difficulty);
 }

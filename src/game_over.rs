@@ -5,6 +5,7 @@ use crate::player::Player;
 use crate::combat::{Health, Dead};
 use crate::state::{AppState, MapState, GameWorld, LastDeathInfo};
 use crate::character_select::PlayerClass;
+use crate::difficulty::Difficulty;
 use crate::DungeonSeed;
 
 // ─── gold ─────────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ pub fn check_player_death(
 pub fn setup_game_over(
     mut commands: Commands,
     death_info:   Res<LastDeathInfo>,
+    difficulty:   Res<Difficulty>,
 ) {
     // Dark overlay — covers the entire screen
     commands.spawn((
@@ -93,8 +95,12 @@ pub fn setup_game_over(
         });
 
         // Respawn prompt
+        let prompt = match *difficulty {
+            Difficulty::Standard   => "Press SPACE to respawn",
+            Difficulty::Permadeath => "PERMADEATH — Press SPACE to start a new game",
+        };
         root.spawn(TextBundle::from_section(
-            "Press SPACE to respawn",
+            prompt,
             TextStyle {
                 font_size: 24.0,
                 color:     Color::rgb(0.75, 0.75, 0.75),
@@ -125,6 +131,7 @@ pub fn handle_respawn_input(
     mut seed_res:   ResMut<DungeonSeed>,
     mut p_query:    Query<(Entity, &mut Health), With<Player>>,
     class_res_r:    Res<PlayerClass>,
+    difficulty:     Res<Difficulty>,
     mut commands:   Commands,
 ) {
     if !keyboard.just_pressed(KeyCode::Space) { return; }
@@ -138,15 +145,28 @@ pub fn handle_respawn_input(
     world.dungeon_rooms  = new_rooms;
     seed_res.0           = new_seed;
 
-    // Restore the player — remove Dead and refill HP to class max.
-    let class = *class_res_r;
-    if let Ok((player_e, mut health)) = p_query.get_single_mut() {
-        health.current = class.max_hp();
-        health.max     = class.max_hp();
-        commands.entity(player_e).remove::<Dead>();
-    }
-
-    // Transition to Hub (triggers OnExit(Dungeon) cleanup) then Playing.
+    // Transition to Hub either way (triggers OnExit(Dungeon) cleanup).
     next_map.set(MapState::Hub);
-    next_app.set(AppState::Playing);
+
+    match *difficulty {
+        Difficulty::Standard => {
+            // Restore the existing player — remove Dead and refill HP to class max.
+            let class = *class_res_r;
+            if let Ok((player_e, mut health)) = p_query.get_single_mut() {
+                health.current = class.max_hp();
+                health.max     = class.max_hp();
+                commands.entity(player_e).remove::<Dead>();
+            }
+            next_app.set(AppState::Playing);
+        }
+        Difficulty::Permadeath => {
+            // Death is final — despawn the character and start a new run from
+            // scratch. `spawn_player` guards on "no existing Player entity", so
+            // despawning here lets the next class pick spawn a genuinely fresh one.
+            if let Ok((player_e, _)) = p_query.get_single_mut() {
+                commands.entity(player_e).despawn();
+            }
+            next_app.set(AppState::CharacterSelect);
+        }
+    }
 }

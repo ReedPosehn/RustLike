@@ -9,6 +9,7 @@ mod combat;
 mod hud;
 mod game_over;
 mod character_select;
+mod difficulty;
 mod projectile;
 mod pause;
 
@@ -31,8 +32,15 @@ use character_select::{
     PlayerClass, SelectedClass,
     setup_character_select, cleanup_character_select, handle_class_input,
 };
+use difficulty::{
+    Difficulty, SelectedDifficultyIndex,
+    setup_difficulty_select, cleanup_difficulty_select, handle_difficulty_input,
+};
 use projectile::{fire_ranged_attack, update_projectiles, despawn_projectiles};
-use pause::{toggle_pause_on_escape, handle_pause_input, setup_pause_menu, cleanup_pause_menu};
+use pause::{
+    toggle_pause_on_escape, handle_pause_input, handle_pause_options_input,
+    setup_pause_menu, cleanup_pause_menu,
+};
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -79,6 +87,8 @@ fn main() {
         .insert_resource(LastDeathInfo::default())
         .insert_resource(PlayerClass::default())
         .insert_resource(SelectedClass::default())
+        .insert_resource(Difficulty::default())
+        .insert_resource(SelectedDifficultyIndex::default())
         .add_event::<DamageEvent>()
         .add_event::<SplatEvent>()
         // States
@@ -88,6 +98,10 @@ fn main() {
         .add_systems(OnEnter(AppState::CharacterSelect), setup_character_select)
         .add_systems(OnExit(AppState::CharacterSelect),  cleanup_character_select)
         .add_systems(Update, handle_class_input.run_if(in_state(AppState::CharacterSelect)))
+        // ── Difficulty select ───────────────────────────────────────────────
+        .add_systems(OnEnter(AppState::DifficultySelect), setup_difficulty_select)
+        .add_systems(OnExit(AppState::DifficultySelect),  cleanup_difficulty_select)
+        .add_systems(Update, handle_difficulty_input.run_if(in_state(AppState::DifficultySelect)))
         // ── Map lifecycle ───────────────────────────────────────────────────
         .add_systems(OnExit(MapState::Hub),      despawn_map)
         .add_systems(OnExit(MapState::Dungeon),  despawn_map)
@@ -104,6 +118,7 @@ fn main() {
         .add_systems(OnExit(AppState::Paused),  cleanup_pause_menu)
         .add_systems(Update, toggle_pause_on_escape.run_if(in_state(AppState::Playing)))
         .add_systems(Update, handle_pause_input.run_if(in_state(AppState::Paused)))
+        .add_systems(Update, handle_pause_options_input.run_if(in_state(AppState::Paused)))
         // ── Player spawn (after class is chosen) ───────────────────────────
         .add_systems(OnEnter(AppState::Playing), spawn_player)
         // ── Startup (camera + HUD only; no player yet) ──────────────────────

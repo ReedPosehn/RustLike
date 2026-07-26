@@ -14,6 +14,7 @@ RustLike is a top-down roguelike prototype in Rust using Bevy 0.11. Features: pr
 | `player.rs` | `Player`, `spawn_player`, `player_movement` |
 | `state.rs` | `AppState`, `MapState`, `GameWorld`, `LastDeathInfo`, transition systems |
 | `character_select.rs` | `PlayerClass`, `AttackKind`, class selection screen |
+| `difficulty.rs` | `Difficulty` (Standard/Permadeath), difficulty selection screen |
 | `enemies.rs` | `EnemyKind`, `Enemy`, `EnemyAi`, spawn/despawn/AI |
 | `combat.rs` | `Health`, `Dead`, `Facing`, `DamageEvent`, `SplatEvent`, combat systems |
 | `projectile.rs` | `Projectile`, ranged/magic attack firing and movement |
@@ -34,15 +35,17 @@ To replay a specific dungeon: set `FIXED_SEED = Some(n)` in `main.rs`.
 ## Application State Flow
 
 ```
-CharacterSelect → Playing ⇄ Paused
-                     ↓
-                  GameOver → Playing (respawn, new seed)
+CharacterSelect → DifficultySelect → Playing ⇄ Paused
+        ↑                               ↓
+        └──────── GameOver (Permadeath) ┤
+                                         └→ Playing (Standard: respawn, new seed)
 ```
 
 - **`CharacterSelect`** (default) — class select screen over the hub map
+- **`DifficultySelect`** — Standard vs. Permadeath select screen, entered right after confirming a class
 - **`Playing`** — all gameplay systems active
-- **`Paused`** — Esc toggles from `Playing`; freezes gameplay, shows controls reference + options stub
-- **`GameOver`** — overlay pauses gameplay; SPACE to respawn
+- **`Paused`** — Esc toggles from `Playing`; freezes gameplay, shows controls reference + a partially-live options panel (difficulty toggle)
+- **`GameOver`** — overlay pauses gameplay; SPACE respawns in place (Standard) or starts a brand new game via `CharacterSelect` (Permadeath)
 
 **`MapState`** (sub-state, only meaningful in `Playing`):
 - `Hub` (default) — hub map active
@@ -80,7 +83,10 @@ CharacterSelect → Playing ⇄ Paused
 | ESC | Pause / resume |
 | ← → or A/D (CharacterSelect) | Browse classes |
 | ENTER / SPACE (CharacterSelect) | Confirm class |
-| SPACE (GameOver) | Respawn |
+| ← → or A/D (DifficultySelect) | Browse Standard / Permadeath |
+| ENTER / SPACE (DifficultySelect) | Confirm difficulty |
+| TAB (Paused) | Toggle difficulty |
+| SPACE (GameOver) | Respawn (Standard) / start new game (Permadeath) |
 
 ## Tilemap Coordinate System
 - Row 0 = bottom, col 0 = left. Y-up matching Bevy world space.
@@ -114,7 +120,10 @@ All damage flows through `DamageEvent { target, amount, source }`. `DamageSource
 - Gravestone spawns in first room of the new dungeon when `LastDeathInfo.seed > 0`
 
 ## Pause Menu (`src/pause.rs`)
-Two one-directional systems (`toggle_pause_on_escape` in `Playing`, `handle_pause_input` in `Paused`) rather than a single toggle — avoids any chance of double-firing in one frame. Shows a controls reference (two-column flexbox layout — Bevy's default font isn't monospace so text padding wouldn't align) and a grayed-out options stub (Volume, Difficulty). Because all gameplay systems are gated by `AppState::Playing`, pausing required no changes to any existing system — they simply stop running.
+Two one-directional systems (`toggle_pause_on_escape` in `Playing`, `handle_pause_input` in `Paused`) rather than a single toggle — avoids any chance of double-firing in one frame. Shows a controls reference (two-column flexbox layout — Bevy's default font isn't monospace so text padding wouldn't align) and an Options panel. Difficulty is now live — TAB (`handle_pause_options_input`) flips the `Difficulty` resource and rebuilds the whole pause menu tree (`build_pause_menu`, shared with `setup_pause_menu`) to reflect it. It rebuilds the whole tree rather than patching just the difficulty text node because Bevy 0.11 doesn't clean up a parent's `Children` list when a single child is despawned with plain `despawn()` (only `despawn_recursive` does) — swapping one line in place left a dangling reference that panicked the UI clipping system. Volume remains a grayed-out stub. Because all gameplay systems are gated by `AppState::Playing`, pausing required no changes to any existing system — they simply stop running.
+
+## Difficulty (`src/difficulty.rs`)
+`Difficulty` (Standard / Permadeath) is a `Resource` set via the `DifficultySelect` screen (mirrors `character_select.rs`'s card-based UI and rebuild-on-navigate pattern) right after class selection, and can be flipped later from the pause menu (see above). `check_player_death`/`setup_game_over`/`handle_respawn_input` (`game_over.rs`) read it to branch death behavior: **Standard** respawns the existing player in place with a new dungeon seed and a full heal (unchanged from before); **Permadeath** despawns the player entity outright and routes back to `AppState::CharacterSelect`, so the next class/difficulty pick spawns a genuinely new character (`spawn_player` already guards on "no existing `Player` entity").
 
 ## Seed System
 Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource stores current seed. Enemy placement uses `seed + 1`. New seed generated on each respawn.
@@ -125,7 +134,7 @@ Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource s
 - **Enemies overlap each other** — no separation logic
 - **Dungeon dimensions** must be recalculated if `SCALE` or resolution changes
 - **No camera scrolling** — dungeon sized to window
-- **Pause options are visual stubs only** — Volume and Difficulty are not yet interactive
+- **Volume option is a visual stub only** — Difficulty is now live (TAB in the pause menu), Volume is not
 
 ## Roadmap
 1. Modular codebase, Bevy States, seeds, tests (Phase 3)
@@ -135,5 +144,5 @@ Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource s
 5. Player class selection (Warrior, Mage, Paladin, Rogue)
 6. Ranged/magic attacks (SPACE), class-based projectile type
 7. Pause menu with controls reference + options stub
-8. **Planned** — Difficulty selector (permadeath vs. standard respawn), likely a state between `CharacterSelect` and `Playing`, with the toggle surfaced in the pause menu's Options stub too
+8. **Done** — Difficulty selector (permadeath vs. standard respawn), a `DifficultySelect` state between `CharacterSelect` and `Playing`, with the toggle also live in the pause menu's Options panel
 9. **Next** — Inventory stub, dungeon depth/difficulty scaling

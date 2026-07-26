@@ -12,6 +12,7 @@ use crate::player::Player;
 pub enum AppState {
     #[default]
     CharacterSelect,
+    DifficultySelect,
     Playing,
     Paused,
     GameOver,

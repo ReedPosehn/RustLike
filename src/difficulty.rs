@@ -1,126 +1,49 @@
 use bevy::prelude::*;
 use crate::state::AppState;
 
-// ─── player class ─────────────────────────────────────────────────────────────
+// ─── difficulty ────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Resource, Component)]
-pub enum PlayerClass {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Resource)]
+pub enum Difficulty {
     #[default]
-    Warrior,
-    Mage,
-    Paladin,
-    Rogue,
+    Standard,
+    Permadeath,
 }
 
-// ─── attack kind ──────────────────────────────────────────────────────────────
-
-/// Whether a class's ranged attack (Space key) is physical or arcane.
-/// Determines projectile sprite and `DamageSource`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AttackKind {
-    Ranged,
-    Magic,
-}
-
-impl PlayerClass {
-    pub const ALL: [PlayerClass; 4] = [
-        PlayerClass::Warrior,
-        PlayerClass::Mage,
-        PlayerClass::Paladin,
-        PlayerClass::Rogue,
-    ];
-
-    pub fn sprite(self) -> &'static str {
-        match self {
-            PlayerClass::Warrior => "warrior.png",
-            PlayerClass::Mage    => "mage.png",
-            PlayerClass::Paladin => "paladin.png",
-            PlayerClass::Rogue   => "rogue.png",
-        }
-    }
+impl Difficulty {
+    pub const ALL: [Difficulty; 2] = [Difficulty::Standard, Difficulty::Permadeath];
 
     pub fn display_name(self) -> &'static str {
         match self {
-            PlayerClass::Warrior => "WARRIOR",
-            PlayerClass::Mage    => "MAGE",
-            PlayerClass::Paladin => "PALADIN",
-            PlayerClass::Rogue   => "ROGUE",
-        }
-    }
-
-    pub fn max_hp(self) -> i32 {
-        match self {
-            PlayerClass::Warrior => 100,
-            PlayerClass::Mage    =>  70,
-            PlayerClass::Paladin => 140,
-            PlayerClass::Rogue   =>  80,
-        }
-    }
-
-    pub fn melee_damage(self) -> i32 {
-        match self {
-            PlayerClass::Warrior => 25,
-            PlayerClass::Mage    => 15,
-            PlayerClass::Paladin => 20,
-            PlayerClass::Rogue   => 20,
-        }
-    }
-
-    /// Damage dealt by the Space-key ranged/magic attack.
-    pub fn ranged_damage(self) -> i32 {
-        match self {
-            PlayerClass::Warrior => 12,
-            PlayerClass::Mage    => 30,
-            PlayerClass::Paladin => 10,
-            PlayerClass::Rogue   => 18,
-        }
-    }
-
-    /// Mage casts magic; everyone else fires a physical projectile.
-    pub fn attack_kind(self) -> AttackKind {
-        match self {
-            PlayerClass::Mage => AttackKind::Magic,
-            _                 => AttackKind::Ranged,
-        }
-    }
-
-    pub fn speed(self) -> f32 {
-        match self {
-            PlayerClass::Warrior => 150.0,
-            PlayerClass::Mage    => 130.0,
-            PlayerClass::Paladin => 120.0,
-            PlayerClass::Rogue   => 190.0,
+            Difficulty::Standard   => "STANDARD",
+            Difficulty::Permadeath => "PERMADEATH",
         }
     }
 
     pub fn flavour(self) -> &'static str {
         match self {
-            PlayerClass::Warrior => "Tough fighter.\nHigh HP, strong melee.",
-            PlayerClass::Mage    => "Arcane scholar.\nLow HP, ranged attacks.",
-            PlayerClass::Paladin => "Holy guardian.\nHeaviest armour, slowest speed.",
-            PlayerClass::Rogue   => "Silent predator.\nFast movement, quick strikes.",
+            Difficulty::Standard   => "Die and respawn.\nNew dungeon, same character, full heal.",
+            Difficulty::Permadeath => "Death is final.\nOne life — dying starts a brand new character.",
         }
     }
 }
 
 // ─── resources / markers ──────────────────────────────────────────────────────
 
-/// Index into `PlayerClass::ALL` for the currently highlighted card.
+/// Index into `Difficulty::ALL` for the currently highlighted card.
 #[derive(Resource, Default)]
-pub struct SelectedClass(pub usize);
+pub struct SelectedDifficultyIndex(pub usize);
 
-/// Tags all character-select UI entities for cleanup.
+/// Tags all difficulty-select UI entities for cleanup.
 #[derive(Component)]
-pub struct ClassSelectUi;
+pub struct DifficultySelectUi;
 
 // ─── setup ────────────────────────────────────────────────────────────────────
 
-pub fn setup_character_select(
-    mut commands:   Commands,
-    asset_server:   Res<AssetServer>,
-    selected:       Res<SelectedClass>,
+pub fn setup_difficulty_select(
+    mut commands: Commands,
+    selected:     Res<SelectedDifficultyIndex>,
 ) {
-    // Full-screen dark background
     commands.spawn((
         NodeBundle {
             style: Style {
@@ -135,12 +58,11 @@ pub fn setup_character_select(
             background_color: Color::rgb(0.06, 0.06, 0.10).into(),
             ..Default::default()
         },
-        ClassSelectUi,
+        DifficultySelectUi,
     ))
     .with_children(|root| {
-        // Title
         root.spawn(TextBundle::from_section(
-            "SELECT YOUR CLASS",
+            "SELECT DIFFICULTY",
             TextStyle {
                 font_size: 52.0,
                 color:     Color::rgb(0.90, 0.80, 0.30),
@@ -148,7 +70,6 @@ pub fn setup_character_select(
             },
         ));
 
-        // Cards row
         root.spawn(NodeBundle {
             style: Style {
                 flex_direction: FlexDirection::Row,
@@ -159,13 +80,12 @@ pub fn setup_character_select(
             ..Default::default()
         })
         .with_children(|row| {
-            for (i, &class) in PlayerClass::ALL.iter().enumerate() {
+            for (i, &difficulty) in Difficulty::ALL.iter().enumerate() {
                 let highlighted = i == selected.0;
-                spawn_class_card(row, &asset_server, class, highlighted);
+                spawn_difficulty_card(row, difficulty, highlighted);
             }
         });
 
-        // Hint
         root.spawn(TextBundle::from_section(
             "← → to browse     ENTER or SPACE to begin",
             TextStyle {
@@ -177,11 +97,10 @@ pub fn setup_character_select(
     });
 }
 
-fn spawn_class_card(
-    parent:       &mut ChildBuilder,
-    asset_server: &AssetServer,
-    class:        PlayerClass,
-    highlighted:  bool,
+fn spawn_difficulty_card(
+    parent:      &mut ChildBuilder,
+    difficulty:  Difficulty,
+    highlighted: bool,
 ) {
     let border_color = if highlighted {
         Color::rgb(0.90, 0.75, 0.20) // gold highlight
@@ -197,8 +116,8 @@ fn spawn_class_card(
     // Outer border node
     parent.spawn(NodeBundle {
         style: Style {
-            width:           Val::Px(200.0),
-            height:          Val::Px(300.0),
+            width:           Val::Px(260.0),
+            height:          Val::Px(180.0),
             padding:         UiRect::all(Val::Px(3.0)),
             flex_direction:  FlexDirection::Column,
             align_items:     AlignItems::Center,
@@ -223,23 +142,8 @@ fn spawn_class_card(
             ..Default::default()
         })
         .with_children(|card| {
-            // Class sprite
-            card.spawn(ImageBundle {
-                style: Style {
-                    width:  Val::Px(80.0),
-                    height: Val::Px(80.0),
-                    ..Default::default()
-                },
-                image: UiImage {
-                    texture: asset_server.load(class.sprite()),
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-
-            // Class name
             card.spawn(TextBundle::from_section(
-                class.display_name(),
+                difficulty.display_name(),
                 TextStyle {
                     font_size: 22.0,
                     color:     if highlighted { Color::rgb(1.0, 0.90, 0.40) } else { Color::WHITE },
@@ -247,22 +151,11 @@ fn spawn_class_card(
                 },
             ));
 
-            // Stats
             card.spawn(TextBundle::from_section(
-                format!("HP  {}\nMEL {}\nRNG {}\nSPD {:.0}", class.max_hp(), class.melee_damage(), class.ranged_damage(), class.speed()),
+                difficulty.flavour(),
                 TextStyle {
                     font_size: 15.0,
                     color:     Color::rgb(0.70, 0.70, 0.70),
-                    ..Default::default()
-                },
-            ));
-
-            // Flavour
-            card.spawn(TextBundle::from_section(
-                class.flavour(),
-                TextStyle {
-                    font_size: 13.0,
-                    color:     Color::rgb(0.50, 0.55, 0.60),
                     ..Default::default()
                 },
             ));
@@ -272,8 +165,8 @@ fn spawn_class_card(
 
 // ─── cleanup ─────────────────────────────────────────────────────────────────
 
-pub fn cleanup_character_select(
-    query:        Query<Entity, With<ClassSelectUi>>,
+pub fn cleanup_difficulty_select(
+    query:        Query<Entity, With<DifficultySelectUi>>,
     mut commands: Commands,
 ) {
     for e in &query { commands.entity(e).despawn_recursive(); }
@@ -283,17 +176,15 @@ pub fn cleanup_character_select(
 
 /// Left/Right to move cursor, Enter/Space to confirm. Rebuilds the UI on
 /// cursor change so the highlighted card updates immediately.
-pub fn handle_class_input(
-    keyboard:        Res<Input<KeyCode>>,
-    mut selected:    ResMut<SelectedClass>,
-    mut next:        ResMut<NextState<AppState>>,
-    mut class_res:   ResMut<PlayerClass>,
-    // Rebuild UI on navigation
-    ui_query:        Query<Entity, With<ClassSelectUi>>,
-    asset_server:    Res<AssetServer>,
-    mut commands:    Commands,
+pub fn handle_difficulty_input(
+    keyboard:         Res<Input<KeyCode>>,
+    mut selected:     ResMut<SelectedDifficultyIndex>,
+    mut next:         ResMut<NextState<AppState>>,
+    mut difficulty_res: ResMut<Difficulty>,
+    ui_query:         Query<Entity, With<DifficultySelectUi>>,
+    mut commands:     Commands,
 ) {
-    let len = PlayerClass::ALL.len();
+    let len = Difficulty::ALL.len();
     let mut changed = false;
 
     if keyboard.just_pressed(KeyCode::Left) || keyboard.just_pressed(KeyCode::A) {
@@ -323,11 +214,11 @@ pub fn handle_class_input(
                 background_color: Color::rgb(0.06, 0.06, 0.10).into(),
                 ..Default::default()
             },
-            ClassSelectUi,
+            DifficultySelectUi,
         ))
         .with_children(|root| {
             root.spawn(TextBundle::from_section(
-                "SELECT YOUR CLASS",
+                "SELECT DIFFICULTY",
                 TextStyle { font_size: 52.0, color: Color::rgb(0.90, 0.80, 0.30), ..Default::default() },
             ));
             root.spawn(NodeBundle {
@@ -340,8 +231,8 @@ pub fn handle_class_input(
                 ..Default::default()
             })
             .with_children(|row| {
-                for (i, &class) in PlayerClass::ALL.iter().enumerate() {
-                    spawn_class_card(row, &asset_server, class, i == selected.0);
+                for (i, &difficulty) in Difficulty::ALL.iter().enumerate() {
+                    spawn_difficulty_card(row, difficulty, i == selected.0);
                 }
             });
             root.spawn(TextBundle::from_section(
@@ -353,7 +244,7 @@ pub fn handle_class_input(
 
     // Confirm
     if keyboard.just_pressed(KeyCode::Return) || keyboard.just_pressed(KeyCode::Space) {
-        *class_res = PlayerClass::ALL[selected.0];
-        next.set(AppState::DifficultySelect);
+        *difficulty_res = Difficulty::ALL[selected.0];
+        next.set(AppState::Playing);
     }
 }
