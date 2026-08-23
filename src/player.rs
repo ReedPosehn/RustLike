@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use crate::{HALF_W, HALF_H};
 use crate::state::{GameWorld, MapState};
 use crate::combat::{Facing, Health, ContactDamageTimer};
-use crate::game_over::Gold;
+use crate::inventory::{Gold, Inventory};
 use crate::character_select::PlayerClass;
 
 /// Tags the player entity.
@@ -36,6 +36,7 @@ pub fn spawn_player(
         Facing::default(),
         ContactDamageTimer::default(),
         Gold::default(),
+        Inventory::default(),
         *class, // store chosen class on the entity for stat lookups
     ));
 }

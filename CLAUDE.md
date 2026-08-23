@@ -15,11 +15,12 @@ RustLike is a top-down roguelike prototype in Rust using Bevy 0.11. Features: pr
 | `state.rs` | `AppState`, `MapState`, `GameWorld`, `LastDeathInfo`, transition systems |
 | `character_select.rs` | `PlayerClass`, `AttackKind`, class selection screen |
 | `difficulty.rs` | `Difficulty` (Standard/Permadeath), difficulty selection screen |
+| `inventory.rs` | `Gold`, `GoldPickup`, `Inventory`/`Item` (stub), spawn/collect/despawn, `InventoryView` screen |
 | `enemies.rs` | `EnemyKind`, `Enemy`, `EnemyAi`, spawn/despawn/AI |
 | `combat.rs` | `Health`, `Dead`, `Facing`, `DamageEvent`, `SplatEvent`, combat systems |
 | `projectile.rs` | `Projectile`, ranged/magic attack firing and movement |
 | `hud.rs` | `BarAssets`, gradient health bar, enemy bars, damage splats |
-| `game_over.rs` | `Gold`, game-over screen, respawn logic |
+| `game_over.rs` | Game-over screen, respawn logic |
 | `pause.rs` | Pause menu, controls reference, options stub |
 
 ## Build & Run
@@ -36,15 +37,18 @@ To replay a specific dungeon: set `FIXED_SEED = Some(n)` in `main.rs`.
 
 ```
 CharacterSelect → DifficultySelect → Playing ⇄ Paused
-        ↑                               ↓
-        └──────── GameOver (Permadeath) ┤
-                                         └→ Playing (Standard: respawn, new seed)
+                                        ⇅
+                                  InventoryView
+
+Playing → GameOver ─┬─ Standard   → Playing (new seed, respawn)
+                     └─ Permadeath → CharacterSelect (new character)
 ```
 
 - **`CharacterSelect`** (default) — class select screen over the hub map
 - **`DifficultySelect`** — Standard vs. Permadeath select screen, entered right after confirming a class
 - **`Playing`** — all gameplay systems active
 - **`Paused`** — Esc toggles from `Playing`; freezes gameplay, shows controls reference + a partially-live options panel (difficulty toggle)
+- **`InventoryView`** — I toggles from `Playing`; freezes gameplay (same mechanism as `Paused` — everything is gated on `AppState::Playing`) and shows the player's `Inventory` (currently always empty — see Inventory below)
 - **`GameOver`** — overlay pauses gameplay; SPACE respawns in place (Standard) or starts a brand new game via `CharacterSelect` (Permadeath)
 
 **`MapState`** (sub-state, only meaningful in `Playing`):
@@ -80,6 +84,7 @@ CharacterSelect → DifficultySelect → Playing ⇄ Paused
 | WASD / Arrows | Move |
 | F | Melee attack (facing direction) |
 | SPACE | Ranged/magic attack (facing direction) |
+| I | Open / close inventory |
 | ESC | Pause / resume |
 | ← → or A/D (CharacterSelect) | Browse classes |
 | ENTER / SPACE (CharacterSelect) | Confirm class |
@@ -103,7 +108,7 @@ All damage flows through `DamageEvent { target, amount, source }`. `DamageSource
 
 **Projectiles** (`projectile.rs`): `fire_ranged_attack` (SPACE) spawns a sprite ahead of the player, rotated to face direction. `update_projectiles` is a single combined system — movement, wall collision, enemy collision, lifetime expiry all in one pass, so an entity is never double-despawned by separate systems racing. `despawn_projectiles` runs on `OnExit(MapState::Dungeon)` to clean up any in-flight projectile when leaving the dungeon (by stairs or by dying) — without this they'd freeze on screen forever since their own update system stops running outside Dungeon+Playing.
 
-**Dead enemy cleanup:** `despawn_dead_enemies` now also despawns any `EnemyBarFor`-tagged health bar entities tracking the dead enemy — previously the bars were separate entities that never received `Dead` themselves, so they were left behind frozen at the enemy's last position.
+**Dead enemy cleanup:** `despawn_dead_enemies` now also despawns any `EnemyBarFor`-tagged health bar entities tracking the dead enemy — previously the bars were separate entities that never received `Dead` themselves, so they were left behind frozen at the enemy's last position. It also drops a gold pickup (`inventory::spawn_gold_pickup`, amount from `EnemyKind::gold_drop()`) at the enemy's position before despawning it.
 
 ## Enemy AI (`src/enemies.rs`)
 `EnemyAi` state machine: `Pausing` → `Walking` → `Chasing`. Chase at 5 tiles, lose at 7 (hysteresis). Same AABB collision as player. Per-enemy seeded RNG. Only runs in `MapState::Dungeon` (and now also gated to `AppState::Playing`, see above).
@@ -113,9 +118,14 @@ All damage flows through `DamageEvent { target, amount, source }`. `DamageSource
 - **Enemy bars** — world-space sprites; always green, shrink to show damage; properly cleaned up on enemy death (see Combat above).
 - **Damage splats** — yellow `-N` text, rises and fades.
 
+## Inventory (`src/inventory.rs`)
+`Gold` (currency) and `Inventory`/`Item` (usable/equipable items) are deliberately separate components — `Gold` is not an item. `Item` is currently an empty enum and `Inventory.items` is always empty; both exist as a stub so a future item system has something concrete to extend without reshaping `Gold`. Gold itself is fully wired up: `combat::despawn_dead_enemies` drops a `GoldPickup` (via `spawn_gold_pickup`) at each dead enemy's position with an amount from `EnemyKind::gold_drop()`; `collect_gold` despawns a pickup and adds its amount to the player's `Gold` when the player walks within `PICKUP_RADIUS`; `despawn_gold_pickups` cleans up any uncollected piles on `OnExit(MapState::Dungeon)`, same lifecycle as `despawn_enemies`/`despawn_projectiles`. The HUD's `GoldText` (`hud.rs`) shows the live total.
+
+`AppState::InventoryView` (I to open/close from `Playing`) shows the player's `Inventory` — currently always "No items yet." since no item types exist. Mirrors `Paused`'s toggle-in-one-direction-per-state pattern (`toggle_inventory_on_key`/`handle_inventory_input`) and freezes gameplay the same way, for free, since every gameplay system is already gated on `AppState::Playing`.
+
 ## Death & Respawn (`src/game_over.rs`)
 - `check_player_death` → `LastDeathInfo { gold_lost, seed }` → `AppState::GameOver`
-- `handle_respawn_input` — new seed, rebuild dungeon, restore HP to `class.max_hp()`, remove `Dead`, → `MapState::Hub` + `AppState::Playing`
+- `handle_respawn_input` — new seed, rebuild dungeon, restore HP to `class.max_hp()`, zero `Gold`, remove `Dead`, → `MapState::Hub` + `AppState::Playing` (Standard only — Permadeath despawns the player instead, see Difficulty below)
 - `spawn_player` guards against duplicate spawns (checks for existing `Player` entity)
 - Gravestone spawns in first room of the new dungeon when `LastDeathInfo.seed > 0`
 
@@ -129,7 +139,7 @@ Two one-directional systems (`toggle_pause_on_escape` in `Playing`, `handle_paus
 Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource stores current seed. Enemy placement uses `seed + 1`. New seed generated on each respawn.
 
 ## Known Issues & Caveats
-- **No inventory or items** — `Gold(u32)` stubbed at 0 on player
+- **No items yet** — `Gold` is fully live (drops from enemies, collectible, shown in HUD, resets on death); `Inventory`/`Item` is a structural stub only, no item types exist
 - **Enemies don't pathfind** — straight-line chase, can get stuck on corners
 - **Enemies overlap each other** — no separation logic
 - **Dungeon dimensions** must be recalculated if `SCALE` or resolution changes
@@ -145,4 +155,4 @@ Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource s
 6. Ranged/magic attacks (SPACE), class-based projectile type
 7. Pause menu with controls reference + options stub
 8. **Done** — Difficulty selector (permadeath vs. standard respawn), a `DifficultySelect` state between `CharacterSelect` and `Playing`, with the toggle also live in the pause menu's Options panel
-9. **Next** — Inventory stub, dungeon depth/difficulty scaling
+9. **Partly done** — Gold is fully functional (enemy drops, pickup, HUD, reset-on-death) with an `Inventory`/`Item` stub laid down for future items, viewable via the I-key `InventoryView` screen (currently always empty); **Next** — actual item types, dungeon depth/difficulty scaling

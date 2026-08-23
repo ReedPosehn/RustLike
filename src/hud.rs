@@ -3,6 +3,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use crate::player::Player;
 use crate::combat::{Health, SplatEvent};
 use crate::enemies::EnemyMarker;
+use crate::inventory::Gold;
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ pub struct BarAssets {
 
 #[derive(Component)] pub struct HealthBarFill;
 #[derive(Component)] pub struct HealthText;
+#[derive(Component)] pub struct GoldText;
 #[derive(Component)] pub struct EnemyBarFor(pub Entity);
 #[derive(Component)] pub struct EnemyBarFill;
 #[derive(Component)] pub struct DamageSplat { remaining: f32, total: f32 }
@@ -149,6 +151,14 @@ pub fn setup_hud(
                 ),
                 HealthText,
             ));
+
+            root.spawn((
+                TextBundle::from_section(
+                    "Gold: 0",
+                    TextStyle { font_size: 15.0, color: Color::rgb(0.90, 0.80, 0.30), ..Default::default() },
+                ),
+                GoldText,
+            ));
         });
 
     commands.insert_resource(bar_assets);
@@ -180,6 +190,16 @@ pub fn update_health_bar(
     }
     for mut text in &mut text_q {
         text.sections[0].value = format!("{} / {}", health.current, health.max);
+    }
+}
+
+pub fn update_gold_display(
+    p_query:    Query<&Gold, With<Player>>,
+    mut text_q: Query<&mut Text, With<GoldText>>,
+) {
+    let Ok(gold) = p_query.get_single() else { return };
+    for mut text in &mut text_q {
+        text.sections[0].value = format!("Gold: {}", gold.0);
     }
 }
 

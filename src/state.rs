@@ -15,6 +15,7 @@ pub enum AppState {
     DifficultySelect,
     Playing,
     Paused,
+    InventoryView,
     GameOver,
 }
 

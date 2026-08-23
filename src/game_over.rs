@@ -6,15 +6,8 @@ use crate::combat::{Health, Dead};
 use crate::state::{AppState, MapState, GameWorld, LastDeathInfo};
 use crate::character_select::PlayerClass;
 use crate::difficulty::Difficulty;
+use crate::inventory::Gold;
 use crate::DungeonSeed;
-
-// ─── gold ─────────────────────────────────────────────────────────────────────
-
-/// Tracks how much gold the player is carrying.
-/// Stubbed at 0 until the item/economy system is built — the death
-/// screen already displays it and the respawn flow already zeroes it.
-#[derive(Component, Default, Debug)]
-pub struct Gold(pub u32);
 
 // ─── UI markers ──────────────────────────────────────────────────────────────
 
@@ -129,7 +122,7 @@ pub fn handle_respawn_input(
     mut next_map:   ResMut<NextState<MapState>>,
     mut world:      ResMut<GameWorld>,
     mut seed_res:   ResMut<DungeonSeed>,
-    mut p_query:    Query<(Entity, &mut Health), With<Player>>,
+    mut p_query:    Query<(Entity, &mut Health, &mut Gold), With<Player>>,
     class_res_r:    Res<PlayerClass>,
     difficulty:     Res<Difficulty>,
     mut commands:   Commands,
@@ -150,11 +143,14 @@ pub fn handle_respawn_input(
 
     match *difficulty {
         Difficulty::Standard => {
-            // Restore the existing player — remove Dead and refill HP to class max.
+            // Restore the existing player — remove Dead, refill HP to class
+            // max, and zero out gold (it was already recorded as "lost" for
+            // the death screen back in `check_player_death`).
             let class = *class_res_r;
-            if let Ok((player_e, mut health)) = p_query.get_single_mut() {
+            if let Ok((player_e, mut health, mut gold)) = p_query.get_single_mut() {
                 health.current = class.max_hp();
                 health.max     = class.max_hp();
+                gold.0         = 0;
                 commands.entity(player_e).remove::<Dead>();
             }
             next_app.set(AppState::Playing);
@@ -163,7 +159,7 @@ pub fn handle_respawn_input(
             // Death is final — despawn the character and start a new run from
             // scratch. `spawn_player` guards on "no existing Player entity", so
             // despawning here lets the next class pick spawn a genuinely fresh one.
-            if let Ok((player_e, _)) = p_query.get_single_mut() {
+            if let Ok((player_e, _, _)) = p_query.get_single_mut() {
                 commands.entity(player_e).despawn();
             }
             next_app.set(AppState::CharacterSelect);

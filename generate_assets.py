@@ -300,6 +300,16 @@ bd.ellipse([14, 14, 18, 18], fill=(245, 230, 255, 255))
 bolt_img.save("assets/magic_bolt.png")
 print("✓  assets/magic_bolt.png")
 
+# ── Pickups ──────────────────────────────────────────────────────────────────
+# Gold pickup — small coin, dropped by enemies on death.
+gold_img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+gdd = ImageDraw.Draw(gold_img)
+gdd.ellipse([9, 11, 23, 25], fill=(150, 110, 20, 255))    # shadow / base
+gdd.ellipse([8, 9, 22, 23], fill=(230, 190, 60, 255))     # coin body
+gdd.ellipse([11, 12, 19, 20], fill=(255, 225, 120, 255))  # highlight
+gold_img.save("assets/gold.png")
+print("✓  assets/gold.png")
+
 # ── TILES — original hand-crafted patterns ───────────────────────────────────
 # Colors shared with character sprites above
 DG = (50, 120, 50, 255)  # dark green

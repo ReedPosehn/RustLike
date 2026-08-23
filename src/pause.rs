@@ -34,10 +34,11 @@ pub fn handle_pause_input(
 
 // ─── UI ──────────────────────────────────────────────────────────────────────
 
-const CONTROLS: [(&str, &str); 7] = [
+const CONTROLS: [(&str, &str); 8] = [
     ("WASD / Arrows", "Move"),
     ("F",             "Melee attack"),
     ("SPACE",         "Ranged / magic attack"),
+    ("I",             "Open / close inventory"),
     ("ESC",           "Pause / resume"),
     ("Walk onto stairs", "Enter / exit dungeon"),
     ("SPACE (game over)", "Respawn"),

@@ -48,6 +48,15 @@ impl EnemyKind {
             EnemyKind::Skeleton => 45,
         }
     }
+
+    /// Gold dropped on death.
+    pub fn gold_drop(self) -> u32 {
+        match self {
+            EnemyKind::Goblin   =>  5,
+            EnemyKind::Orc      => 12,
+            EnemyKind::Skeleton =>  8,
+        }
+    }
 }
 
 // ─── AI state ────────────────────────────────────────────────────────────────
@@ -71,7 +80,6 @@ pub struct EnemyMarker;
 /// Data component on each enemy entity.
 #[derive(Component)]
 pub struct Enemy {
-    #[allow(dead_code)] // used when per-kind AI behaviours are added
     pub kind: EnemyKind,
 }
 

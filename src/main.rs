@@ -10,6 +10,7 @@ mod hud;
 mod game_over;
 mod character_select;
 mod difficulty;
+mod inventory;
 mod projectile;
 mod pause;
 
@@ -26,7 +27,7 @@ use combat::{
     update_facing, player_melee_attack,
     enemy_contact_damage,
 };
-use hud::{setup_hud, update_health_bar, sync_enemy_bars, handle_splat_events, update_damage_splats};
+use hud::{setup_hud, update_health_bar, update_gold_display, sync_enemy_bars, handle_splat_events, update_damage_splats};
 use game_over::{check_player_death, setup_game_over, cleanup_game_over, handle_respawn_input};
 use character_select::{
     PlayerClass, SelectedClass,
@@ -35,6 +36,11 @@ use character_select::{
 use difficulty::{
     Difficulty, SelectedDifficultyIndex,
     setup_difficulty_select, cleanup_difficulty_select, handle_difficulty_input,
+};
+use inventory::{
+    collect_gold, despawn_gold_pickups,
+    toggle_inventory_on_key, handle_inventory_input,
+    setup_inventory_view, cleanup_inventory_view,
 };
 use projectile::{fire_ranged_attack, update_projectiles, despawn_projectiles};
 use pause::{
@@ -110,6 +116,7 @@ fn main() {
         // ── Enemy lifecycle ─────────────────────────────────────────────────
         .add_systems(OnExit(MapState::Dungeon),  despawn_enemies)
         .add_systems(OnExit(MapState::Dungeon),  despawn_projectiles)
+        .add_systems(OnExit(MapState::Dungeon),  despawn_gold_pickups)
         // ── Game over lifecycle ─────────────────────────────────────────────
         .add_systems(OnEnter(AppState::GameOver), setup_game_over)
         .add_systems(OnExit(AppState::GameOver),  cleanup_game_over)
@@ -119,6 +126,11 @@ fn main() {
         .add_systems(Update, toggle_pause_on_escape.run_if(in_state(AppState::Playing)))
         .add_systems(Update, handle_pause_input.run_if(in_state(AppState::Paused)))
         .add_systems(Update, handle_pause_options_input.run_if(in_state(AppState::Paused)))
+        // ── Inventory view lifecycle ────────────────────────────────────────
+        .add_systems(OnEnter(AppState::InventoryView), setup_inventory_view)
+        .add_systems(OnExit(AppState::InventoryView),  cleanup_inventory_view)
+        .add_systems(Update, toggle_inventory_on_key.run_if(in_state(AppState::Playing)))
+        .add_systems(Update, handle_inventory_input.run_if(in_state(AppState::InventoryView)))
         // ── Player spawn (after class is chosen) ───────────────────────────
         .add_systems(OnEnter(AppState::Playing), spawn_player)
         // ── Startup (camera + HUD only; no player yet) ──────────────────────
@@ -131,6 +143,7 @@ fn main() {
             apply_damage,
             check_player_death,
             update_health_bar,
+            update_gold_display,
             handle_splat_events,
             update_damage_splats,
             sync_enemy_bars,
@@ -143,6 +156,7 @@ fn main() {
             player_melee_attack,
             enemy_contact_damage,
             despawn_dead_enemies,
+            collect_gold,
             fire_ranged_attack,
             update_projectiles,
         ).run_if(in_state(MapState::Dungeon).and_then(in_state(AppState::Playing))))

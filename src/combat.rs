@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use crate::{TILE, HALF_W, HALF_H};
 use crate::player::Player;
 use crate::enemies::Enemy;
+use crate::inventory::spawn_gold_pickup;
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -111,14 +112,23 @@ pub fn apply_damage(
 /// Despawns any entity tagged `Dead` on the enemy side, along with its
 /// associated health bar sprites (which are separate entities tracked via
 /// `EnemyBarFor` — they don't get `Dead` themselves, so without this they'd
-/// be left behind, frozen at the enemy's last position).
+/// be left behind, frozen at the enemy's last position). Also drops a gold
+/// pickup at the enemy's position before it's removed.
 /// Player death is handled separately (game-over screen).
 pub fn despawn_dead_enemies(
-    dead_query:   Query<Entity, (With<Dead>, With<Enemy>)>,
+    dead_query:   Query<(Entity, &Transform, &Enemy), (With<Dead>, With<Enemy>)>,
     bar_query:    Query<(Entity, &crate::hud::EnemyBarFor)>,
+    asset_server: Res<AssetServer>,
     mut commands: Commands,
 ) {
-    for dead_entity in &dead_query {
+    for (dead_entity, transform, enemy) in &dead_query {
+        spawn_gold_pickup(
+            &mut commands,
+            &asset_server,
+            transform.translation.truncate(),
+            enemy.kind.gold_drop(),
+        );
+
         commands.entity(dead_entity).despawn();
         for (bar_entity, bar_for) in &bar_query {
             if bar_for.0 == dead_entity {
