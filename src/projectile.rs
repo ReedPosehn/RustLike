@@ -1,14 +1,14 @@
-use bevy::prelude::*;
-use crate::{TILE, HALF_W, SCALE};
-use crate::player::Player;
+use crate::character_select::{AttackKind, PlayerClass};
+use crate::combat::{DamageEvent, DamageSource, Dead, Facing};
 use crate::enemies::Enemy;
-use crate::combat::{Facing, Dead, DamageEvent, DamageSource};
+use crate::player::Player;
 use crate::state::{GameWorld, MapState};
-use crate::character_select::{PlayerClass, AttackKind};
+use crate::{HALF_W, SCALE, TILE};
+use bevy::prelude::*;
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
-const PROJECTILE_SPEED:         f32 = 340.0;
+const PROJECTILE_SPEED: f32 = 340.0;
 const PROJECTILE_LIFETIME_SECS: f32 = 1.1;
 /// Distance at which a projectile is considered to have hit an enemy.
 const HIT_RADIUS: f32 = TILE * 0.4;
@@ -19,8 +19,8 @@ const HIT_RADIUS: f32 = TILE * 0.4;
 #[derive(Component)]
 pub struct Projectile {
     direction: Vec2,
-    damage:    i32,
-    source:    DamageSource,
+    damage: i32,
+    source: DamageSource,
 }
 
 /// Despawns the projectile once its timer finishes, even if it never hits
@@ -33,25 +33,31 @@ pub struct ProjectileLifetime(Timer);
 /// Space key — fires a ranged or magic projectile in the player's facing
 /// direction. Sprite and `DamageSource` depend on the player's class.
 pub fn fire_ranged_attack(
-    keyboard:     Res<Input<KeyCode>>,
+    keyboard: Res<Input<KeyCode>>,
     asset_server: Res<AssetServer>,
     mut commands: Commands,
-    p_query:      Query<(&Transform, &Facing, &PlayerClass), With<Player>>,
+    p_query: Query<(&Transform, &Facing, &PlayerClass), With<Player>>,
 ) {
-    if !keyboard.just_pressed(KeyCode::Space) { return; }
+    if !keyboard.just_pressed(KeyCode::Space) {
+        return;
+    }
 
-    let Ok((transform, facing, class)) = p_query.get_single() else { return };
-    if facing.0 == Vec2::ZERO { return; }
+    let Ok((transform, facing, class)) = p_query.get_single() else {
+        return;
+    };
+    if facing.0 == Vec2::ZERO {
+        return;
+    }
 
     let (sprite, source) = match class.attack_kind() {
-        AttackKind::Magic  => ("magic_bolt.png", DamageSource::Magic),
-        AttackKind::Ranged => ("arrow.png",      DamageSource::Ranged),
+        AttackKind::Magic => ("magic_bolt.png", DamageSource::Magic),
+        AttackKind::Ranged => ("arrow.png", DamageSource::Ranged),
     };
 
     // Spawn just ahead of the player so the projectile doesn't immediately
     // overlap and despawn at point-blank range.
     let spawn_pos = transform.translation.truncate() + facing.0 * (HALF_W + 6.0);
-    let angle     = facing.0.y.atan2(facing.0.x);
+    let angle = facing.0.y.atan2(facing.0.x);
 
     commands.spawn((
         SpriteBundle {
@@ -63,10 +69,13 @@ pub fn fire_ranged_attack(
         },
         Projectile {
             direction: facing.0,
-            damage:    class.ranged_damage(),
+            damage: class.ranged_damage(),
             source,
         },
-        ProjectileLifetime(Timer::from_seconds(PROJECTILE_LIFETIME_SECS, TimerMode::Once)),
+        ProjectileLifetime(Timer::from_seconds(
+            PROJECTILE_LIFETIME_SECS,
+            TimerMode::Once,
+        )),
     ));
 }
 
@@ -77,16 +86,16 @@ pub fn fire_ranged_attack(
 /// movement/collision systems) so each projectile is despawned at most
 /// once per frame.
 pub fn update_projectiles(
-    time:         Res<Time>,
-    world:        Res<GameWorld>,
-    state:        Res<State<MapState>>,
+    time: Res<Time>,
+    world: Res<GameWorld>,
+    state: Res<State<MapState>>,
     mut commands: Commands,
-    mut events:   EventWriter<DamageEvent>,
-    mut p_query:  Query<(Entity, &mut Transform, &Projectile, &mut ProjectileLifetime)>,
-    e_query:      Query<(Entity, &Transform), (With<Enemy>, Without<Dead>, Without<Projectile>)>,
+    mut events: EventWriter<DamageEvent>,
+    mut p_query: Query<(Entity, &mut Transform, &Projectile, &mut ProjectileLifetime)>,
+    e_query: Query<(Entity, &Transform), (With<Enemy>, Without<Dead>, Without<Projectile>)>,
 ) {
     let map = world.current(state.get());
-    let dt  = time.delta_seconds();
+    let dt = time.delta_seconds();
 
     for (entity, mut transform, proj, mut lifetime) in &mut p_query {
         lifetime.0.tick(time.delta());
@@ -111,7 +120,11 @@ pub fn update_projectiles(
         let mut hit = false;
         for (e_entity, e_transform) in &e_query {
             if pos.distance(e_transform.translation.truncate()) < HIT_RADIUS {
-                events.send(DamageEvent { target: e_entity, amount: proj.damage, source: proj.source });
+                events.send(DamageEvent {
+                    target: e_entity,
+                    amount: proj.damage,
+                    source: proj.source,
+                });
                 hit = true;
                 break;
             }
@@ -128,9 +141,8 @@ pub fn update_projectiles(
 /// walking onto the stairs and dying mid-flight (death stops `update_projectiles`
 /// from running, since it requires `AppState::Playing`, so without this the
 /// projectile would otherwise sit frozen on screen forever).
-pub fn despawn_projectiles(
-    query:        Query<Entity, With<Projectile>>,
-    mut commands: Commands,
-) {
-    for e in &query { commands.entity(e).despawn(); }
+pub fn despawn_projectiles(query: Query<Entity, With<Projectile>>, mut commands: Commands) {
+    for e in &query {
+        commands.entity(e).despawn();
+    }
 }

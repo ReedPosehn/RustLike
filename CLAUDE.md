@@ -15,7 +15,7 @@ RustLike is a top-down roguelike prototype in Rust using Bevy 0.11. Features: pr
 | `state.rs` | `AppState`, `MapState`, `GameWorld`, `LastDeathInfo`, transition systems |
 | `character_select.rs` | `PlayerClass`, `AttackKind`, class selection screen |
 | `difficulty.rs` | `Difficulty` (Standard/Permadeath), difficulty selection screen |
-| `inventory.rs` | `Gold`, `GoldPickup`, `Inventory`/`Item` (stub), spawn/collect/despawn, `InventoryView` screen |
+| `inventory.rs` | `Gold`, `GoldPickup`, `Inventory`/`Item`, potion pickups, inventory UI |
 | `enemies.rs` | `EnemyKind`, `Enemy`, `EnemyAi`, spawn/despawn/AI |
 | `combat.rs` | `Health`, `Dead`, `Facing`, `DamageEvent`, `SplatEvent`, combat systems |
 | `projectile.rs` | `Projectile`, ranged/magic attack firing and movement |
@@ -48,7 +48,7 @@ Playing → GameOver ─┬─ Standard   → Playing (new seed, respawn)
 - **`DifficultySelect`** — Standard vs. Permadeath select screen, entered right after confirming a class
 - **`Playing`** — all gameplay systems active
 - **`Paused`** — Esc toggles from `Playing`; freezes gameplay, shows controls reference + a partially-live options panel (difficulty toggle)
-- **`InventoryView`** — I toggles from `Playing`; freezes gameplay (same mechanism as `Paused` — everything is gated on `AppState::Playing`) and shows the player's `Inventory` (currently always empty — see Inventory below)
+- **`InventoryView`** — I toggles from `Playing`; freezes gameplay (same mechanism as `Paused` — everything is gated on `AppState::Playing`) and shows the player's `Inventory`, including held health potions with their icon
 - **`GameOver`** — overlay pauses gameplay; SPACE respawns in place (Standard) or starts a brand new game via `CharacterSelect` (Permadeath)
 
 **`MapState`** (sub-state, only meaningful in `Playing`):
@@ -84,6 +84,7 @@ Playing → GameOver ─┬─ Standard   → Playing (new seed, respawn)
 | WASD / Arrows | Move |
 | F | Melee attack (facing direction) |
 | SPACE | Ranged/magic attack (facing direction) |
+| H | Use a health potion (restores 35 HP) |
 | I | Open / close inventory |
 | ESC | Pause / resume |
 | ← → or A/D (CharacterSelect) | Browse classes |
@@ -119,9 +120,11 @@ All damage flows through `DamageEvent { target, amount, source }`. `DamageSource
 - **Damage splats** — yellow `-N` text, rises and fades.
 
 ## Inventory (`src/inventory.rs`)
-`Gold` (currency) and `Inventory`/`Item` (usable/equipable items) are deliberately separate components — `Gold` is not an item. `Item` is currently an empty enum and `Inventory.items` is always empty; both exist as a stub so a future item system has something concrete to extend without reshaping `Gold`. Gold itself is fully wired up: `combat::despawn_dead_enemies` drops a `GoldPickup` (via `spawn_gold_pickup`) at each dead enemy's position with an amount from `EnemyKind::gold_drop()`; `collect_gold` despawns a pickup and adds its amount to the player's `Gold` when the player walks within `PICKUP_RADIUS`; `despawn_gold_pickups` cleans up any uncollected piles on `OnExit(MapState::Dungeon)`, same lifecycle as `despawn_enemies`/`despawn_projectiles`. The HUD's `GoldText` (`hud.rs`) shows the live total.
+`Gold` (currency) and `Inventory`/`Item` (usable/equipable items) are deliberately separate components — `Gold` is not an item. `Item` currently has one variant, `HealthPotion`. Gold drops from enemies via `spawn_gold_pickup`, is collected by walking within `PICKUP_RADIUS`, shown live in the HUD, and reset on Standard respawn.
 
-`AppState::InventoryView` (I to open/close from `Playing`) shows the player's `Inventory` — currently always "No items yet." since no item types exist. Mirrors `Paused`'s toggle-in-one-direction-per-state pattern (`toggle_inventory_on_key`/`handle_inventory_input`) and freezes gameplay the same way, for free, since every gameplay system is already gated on `AppState::Playing`.
+Health potions have a 20% chance to drop when an enemy dies. `PotionPickup` entities are collected by walking over them and added to `Inventory`. Press `H` while playing to consume one potion and restore up to 35 HP; no potion is consumed at full health. Pickup entities are despawned together with gold piles when leaving the dungeon.
+
+`AppState::InventoryView` opens with `I` from `Playing` and closes with `I` or `Escape`. It displays the potion count alongside a 32×32 potion icon. Gameplay is frozen while the inventory is open because existing gameplay systems are gated on `AppState::Playing`.
 
 ## Death & Respawn (`src/game_over.rs`)
 - `check_player_death` → `LastDeathInfo { gold_lost, seed }` → `AppState::GameOver`
@@ -139,12 +142,12 @@ Two one-directional systems (`toggle_pause_on_escape` in `Playing`, `handle_paus
 Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource stores current seed. Enemy placement uses `seed + 1`. New seed generated on each respawn.
 
 ## Known Issues & Caveats
-- **No items yet** — `Gold` is fully live (drops from enemies, collectible, shown in HUD, resets on death); `Inventory`/`Item` is a structural stub only, no item types exist
+- **Inventory is intentionally minimal** — Health potions are usable and persistent in the player inventory, but there are no equipment or additional item types yet
 - **Enemies don't pathfind** — straight-line chase, can get stuck on corners
 - **Enemies overlap each other** — no separation logic
 - **Dungeon dimensions** must be recalculated if `SCALE` or resolution changes
 - **No camera scrolling** — dungeon sized to window
-- **Volume option is a visual stub only** — Difficulty is now live (TAB in the pause menu), Volume is not
+- **Volume option is a visual stub only** — Difficulty is live (TAB in the pause menu), Volume is not
 
 ## Roadmap
 1. Modular codebase, Bevy States, seeds, tests (Phase 3)
@@ -154,5 +157,6 @@ Seed printed at startup. `FIXED_SEED = Some(n)` to pin. `DungeonSeed` resource s
 5. Player class selection (Warrior, Mage, Paladin, Rogue)
 6. Ranged/magic attacks (SPACE), class-based projectile type
 7. Pause menu with controls reference + options stub
-8. **Done** — Difficulty selector (permadeath vs. standard respawn), a `DifficultySelect` state between `CharacterSelect` and `Playing`, with the toggle also live in the pause menu's Options panel
-9. **Partly done** — Gold is fully functional (enemy drops, pickup, HUD, reset-on-death) with an `Inventory`/`Item` stub laid down for future items, viewable via the I-key `InventoryView` screen (currently always empty); **Next** — actual item types, dungeon depth/difficulty scaling
+8. **Done** — Difficulty selector (permadeath vs. standard respawn), with the toggle live in the pause menu
+9. **Done** — Gold drops, pickup, HUD display, reset-on-death, and potion inventory/usage
+10. **Next** — Additional item types, equipment, dungeon depth/difficulty scaling, enemy separation and pathfinding

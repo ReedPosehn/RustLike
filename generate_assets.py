@@ -310,6 +310,17 @@ gdd.ellipse([11, 12, 19, 20], fill=(255, 225, 120, 255))  # highlight
 gold_img.save("assets/gold.png")
 print("✓  assets/gold.png")
 
+# Health potion pickup — red glass bottle with a bright highlight.
+potion_img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+pd = ImageDraw.Draw(potion_img)
+pd.rectangle([13, 4, 18, 9], fill=(220, 220, 220, 255))
+pd.rectangle([11, 8, 20, 11], fill=(120, 40, 40, 255))
+pd.ellipse([7, 10, 24, 27], fill=(120, 20, 20, 255))
+pd.ellipse([9, 12, 22, 25], fill=(220, 55, 55, 255))
+pd.ellipse([12, 14, 16, 18], fill=(255, 180, 180, 255))
+potion_img.save("assets/potion.png")
+print("✓  assets/potion.png")
+
 # ── TILES — original hand-crafted patterns ───────────────────────────────────
 # Colors shared with character sprites above
 DG = (50, 120, 50, 255)  # dark green

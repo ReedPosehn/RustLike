@@ -24,6 +24,8 @@ To replay a dungeon: copy the seed printed at startup and set `FIXED_SEED = Some
 | WASD / Arrows | Move |
 | F | Melee attack (facing direction) |
 | SPACE | Ranged / magic attack (facing direction) |
+| H | Use a health potion |
+| I | Open / close inventory |
 | ESC | Pause / resume |
 | ← → on class screen | Browse classes |
 | ENTER / SPACE | Confirm class selection / Respawn |
@@ -47,6 +49,8 @@ src/
 ├── player.rs           # movement, class-aware stats
 ├── state.rs            # AppState, MapState, world transitions
 ├── character_select.rs # class selection screen
+├── difficulty.rs       # standard/permadeath selection
+├── inventory.rs        # gold, potion pickups, inventory and item usage
 ├── enemies.rs          # enemy AI and spawning
 ├── combat.rs           # health, damage events, melee
 ├── projectile.rs       # ranged/magic attacks
@@ -63,7 +67,10 @@ src/
 - Melee combat (F) and ranged/magic combat (SPACE), both class-based damage
 - Gradient health bar, enemy HP bars, floating damage numbers
 - Death screen with gold-loss display; gravestone appears in the next dungeon
-- Pause menu with a controls reference and options stub
+- Standard/permadeath difficulty selection, with live difficulty toggling from pause
+- Gold drops and pickups; health potions drop, stack in inventory, and restore 35 HP with `H`
+- Inventory screen with a potion icon and count, opened and closed with `I`
+- Pause menu with a controls reference and difficulty options
 - 14 automated tests for map generation and coordinate math
 
 ## Roadmap
@@ -75,9 +82,10 @@ Modules, Bevy States, seeded generation, automated tests
 Enemy AI, health system, melee + ranged/magic attacks, HUD, death/respawn, class selection, pause menu
 
 ### 🎮 Phase 5 — Gameplay Mechanics (next)
-- Difficulty selector (permadeath vs. respawn)
-- Inventory and item pickup
+- ✅ Difficulty selector (permadeath vs. standard respawn)
+- ✅ Gold and health potion pickups with a usable inventory
 - Dungeon depth and difficulty scaling
+- Additional item types and equipment
 - Keys, locks, themed rooms
 
 ### ✨ Phase 6 — Polish

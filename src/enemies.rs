@@ -1,23 +1,23 @@
-use bevy::prelude::*;
-use rand::{Rng, SeedableRng};
-use rand::rngs::StdRng;
-use crate::{SCALE, TILE, HALF_W, HALF_H, DungeonSeed};
-use crate::state::{GameWorld, MapState};
-use crate::player::Player;
 use crate::combat::Health;
 use crate::hud::spawn_enemy_health_bar;
+use crate::player::Player;
+use crate::state::{GameWorld, MapState};
+use crate::{DungeonSeed, HALF_H, HALF_W, SCALE, TILE};
+use bevy::prelude::*;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
 /// World-units per second for wandering movement.
 const WANDER_SPEED: f32 = 45.0;
 /// World-units per second when chasing the player.
-const CHASE_SPEED:  f32 = 90.0;
+const CHASE_SPEED: f32 = 90.0;
 /// Distance at which an enemy notices the player and starts chasing.
 const CHASE_RADIUS: f32 = TILE * 5.0;
 /// Distance at which a chasing enemy gives up and goes back to wandering.
 /// Larger than CHASE_RADIUS to prevent jitter at the boundary.
-const LOSE_RADIUS:  f32 = TILE * 7.0;
+const LOSE_RADIUS: f32 = TILE * 7.0;
 /// How long (seconds) an enemy walks in one wander direction before
 /// choosing a new one.
 const WANDER_WALK_SECS: f32 = 1.2;
@@ -36,15 +36,15 @@ pub enum EnemyKind {
 impl EnemyKind {
     fn asset(self) -> &'static str {
         match self {
-            EnemyKind::Goblin   => "goblin.png",
-            EnemyKind::Orc      => "orc.png",
+            EnemyKind::Goblin => "goblin.png",
+            EnemyKind::Orc => "orc.png",
             EnemyKind::Skeleton => "skeleton.png",
         }
     }
     pub fn max_hp(self) -> i32 {
         match self {
-            EnemyKind::Goblin   => 30,
-            EnemyKind::Orc      => 60,
+            EnemyKind::Goblin => 30,
+            EnemyKind::Orc => 60,
             EnemyKind::Skeleton => 45,
         }
     }
@@ -52,9 +52,9 @@ impl EnemyKind {
     /// Gold dropped on death.
     pub fn gold_drop(self) -> u32 {
         match self {
-            EnemyKind::Goblin   =>  5,
-            EnemyKind::Orc      => 12,
-            EnemyKind::Skeleton =>  8,
+            EnemyKind::Goblin => 5,
+            EnemyKind::Orc => 12,
+            EnemyKind::Skeleton => 8,
         }
     }
 }
@@ -88,17 +88,16 @@ pub struct Enemy {
 pub struct EnemyAi {
     mode: AiMode,
     /// Seeded per-enemy RNG so each enemy wanders independently.
-    rng:  StdRng,
+    rng: StdRng,
 }
 
 impl EnemyAi {
     fn new(seed: u64) -> Self {
         EnemyAi {
             mode: AiMode::Pausing { remaining: 0.0 },
-            rng:  StdRng::seed_from_u64(seed),
+            rng: StdRng::seed_from_u64(seed),
         }
     }
-
 }
 
 // ─── spawn / despawn systems ─────────────────────────────────────────────────
@@ -107,8 +106,8 @@ impl EnemyAi {
 pub fn spawn_enemies(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    world:        Res<GameWorld>,
-    seed:         Res<DungeonSeed>,
+    world: Res<GameWorld>,
+    seed: Res<DungeonSeed>,
 ) {
     // Offset the seed so enemy placement RNG is independent from map gen.
     let mut rng = StdRng::seed_from_u64(seed.0.wrapping_add(1));
@@ -125,7 +124,7 @@ pub fn spawn_enemies(
 
     for room in spawn_rooms {
         let centre = room.centre;
-        let count  = rng.gen_range(1..=2usize);
+        let count = rng.gen_range(1..=2usize);
         for i in 0..count {
             let kind = kinds[rng.gen_range(0..kinds.len())];
             let x_offset = if i == 0 { -TILE * 0.5 } else { TILE * 0.5 };
@@ -134,21 +133,20 @@ pub fn spawn_enemies(
             // and its spawn index so they wander independently.
             let ai_seed = seed.0.wrapping_add(rng.gen::<u64>());
 
-            let enemy_entity = commands.spawn((
-                SpriteBundle {
-                    texture: asset_server.load(kind.asset()),
-                    transform: Transform::from_xyz(
-                        centre.x + x_offset,
-                        centre.y,
-                        1.0,
-                    ).with_scale(Vec3::splat(SCALE)),
-                    ..Default::default()
-                },
-                Enemy { kind },
-                Health::new(kind.max_hp()),
-                EnemyAi::new(ai_seed),
-                EnemyMarker,
-            )).id();
+            let enemy_entity = commands
+                .spawn((
+                    SpriteBundle {
+                        texture: asset_server.load(kind.asset()),
+                        transform: Transform::from_xyz(centre.x + x_offset, centre.y, 1.0)
+                            .with_scale(Vec3::splat(SCALE)),
+                        ..Default::default()
+                    },
+                    Enemy { kind },
+                    Health::new(kind.max_hp()),
+                    EnemyAi::new(ai_seed),
+                    EnemyMarker,
+                ))
+                .id();
 
             spawn_enemy_health_bar(&mut commands, enemy_entity);
         }
@@ -156,11 +154,10 @@ pub fn spawn_enemies(
 }
 
 /// Despawn all enemy entities when leaving the Dungeon state.
-pub fn despawn_enemies(
-    query:        Query<Entity, With<EnemyMarker>>,
-    mut commands: Commands,
-) {
-    for e in &query { commands.entity(e).despawn(); }
+pub fn despawn_enemies(query: Query<Entity, With<EnemyMarker>>, mut commands: Commands) {
+    for e in &query {
+        commands.entity(e).despawn();
+    }
 }
 
 // ─── AI system ───────────────────────────────────────────────────────────────
@@ -168,13 +165,13 @@ pub fn despawn_enemies(
 /// Drives enemy wander/chase behaviour. Only runs in the Dungeon state.
 /// Uses the same AABB leading-face collision probes as the player.
 pub fn enemy_ai(
-    time:       Res<Time>,
-    world:      Res<GameWorld>,
-    p_query:    Query<&Transform, With<Player>>,
+    time: Res<Time>,
+    world: Res<GameWorld>,
+    p_query: Query<&Transform, With<Player>>,
     mut e_query: Query<(&mut Transform, &mut EnemyAi), Without<Player>>,
 ) {
     let map = world.current(&MapState::Dungeon);
-    let dt  = time.delta_seconds();
+    let dt = time.delta_seconds();
 
     let player_pos = p_query
         .get_single()
@@ -182,14 +179,16 @@ pub fn enemy_ai(
         .unwrap_or(Vec2::ZERO);
 
     for (mut transform, mut ai) in &mut e_query {
-        let pos  = transform.translation.truncate();
+        let pos = transform.translation.truncate();
         let dist = pos.distance(player_pos);
 
         // ── state transitions ────────────────────────────────────────────────
         match &ai.mode {
             AiMode::Chasing => {
                 if dist > LOSE_RADIUS {
-                    ai.mode = AiMode::Pausing { remaining: WANDER_PAUSE_SECS };
+                    ai.mode = AiMode::Pausing {
+                        remaining: WANDER_PAUSE_SECS,
+                    };
                 }
             }
             _ => {
@@ -204,13 +203,19 @@ pub fn enemy_ai(
             AiMode::Chasing => {
                 // Move straight toward the player.
                 let to_player = player_pos - pos;
-                if to_player.length() > 1.0 { to_player.normalize() } else { Vec2::ZERO }
+                if to_player.length() > 1.0 {
+                    to_player.normalize()
+                } else {
+                    Vec2::ZERO
+                }
             }
 
             AiMode::Walking { dir, remaining } => {
                 *remaining -= dt;
                 if *remaining <= 0.0 {
-                    ai.mode = AiMode::Pausing { remaining: WANDER_PAUSE_SECS };
+                    ai.mode = AiMode::Pausing {
+                        remaining: WANDER_PAUSE_SECS,
+                    };
                     Vec2::ZERO
                 } else {
                     *dir
@@ -223,17 +228,19 @@ pub fn enemy_ai(
                     let dir = ai.rng.gen_range(0..8); // pick via rng before borrowing ai.mode
                     let new_dir = {
                         let dirs = [
-                            Vec2::new( 1.0,  0.0), Vec2::new(-1.0,  0.0),
-                            Vec2::new( 0.0,  1.0), Vec2::new( 0.0, -1.0),
-                            Vec2::new( 1.0,  1.0).normalize(),
-                            Vec2::new(-1.0,  1.0).normalize(),
-                            Vec2::new( 1.0, -1.0).normalize(),
+                            Vec2::new(1.0, 0.0),
+                            Vec2::new(-1.0, 0.0),
+                            Vec2::new(0.0, 1.0),
+                            Vec2::new(0.0, -1.0),
+                            Vec2::new(1.0, 1.0).normalize(),
+                            Vec2::new(-1.0, 1.0).normalize(),
+                            Vec2::new(1.0, -1.0).normalize(),
                             Vec2::new(-1.0, -1.0).normalize(),
                         ];
                         dirs[dir]
                     };
                     ai.mode = AiMode::Walking {
-                        dir:       new_dir,
+                        dir: new_dir,
                         remaining: WANDER_WALK_SECS,
                     };
                     new_dir
@@ -243,11 +250,13 @@ pub fn enemy_ai(
             }
         };
 
-        if dir == Vec2::ZERO { continue; }
+        if dir == Vec2::ZERO {
+            continue;
+        }
 
         let speed = match &ai.mode {
             AiMode::Chasing => CHASE_SPEED,
-            _               => WANDER_SPEED,
+            _ => WANDER_SPEED,
         };
 
         let px = transform.translation.x;
@@ -256,22 +265,26 @@ pub fn enemy_ai(
         // X axis — same leading-face AABB probe as player_movement.
         let dx = dir.x * speed * dt;
         if dx != 0.0 {
-            let nx     = px + dx;
+            let nx = px + dx;
             let face_x = if dx > 0.0 { nx + HALF_W } else { nx - HALF_W };
             let blocked = map.solid_at(Vec2::new(face_x, py - HALF_H + 1.0))
-                       || map.solid_at(Vec2::new(face_x, py + HALF_H - 1.0));
-            if !blocked { transform.translation.x = nx; }
+                || map.solid_at(Vec2::new(face_x, py + HALF_H - 1.0));
+            if !blocked {
+                transform.translation.x = nx;
+            }
         }
 
         // Y axis — use updated x for correct diagonal corner handling.
         let px = transform.translation.x;
         let dy = dir.y * speed * dt;
         if dy != 0.0 {
-            let ny     = py + dy;
+            let ny = py + dy;
             let face_y = if dy > 0.0 { ny + HALF_H } else { ny - HALF_H };
             let blocked = map.solid_at(Vec2::new(px - HALF_W + 1.0, face_y))
-                       || map.solid_at(Vec2::new(px + HALF_W - 1.0, face_y));
-            if !blocked { transform.translation.y = ny; }
+                || map.solid_at(Vec2::new(px + HALF_W - 1.0, face_y));
+            if !blocked {
+                transform.translation.y = ny;
+            }
         }
     }
 }

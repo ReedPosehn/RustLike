@@ -1,8 +1,9 @@
-use bevy::prelude::*;
-use crate::{TILE, HALF_W, HALF_H};
-use crate::player::Player;
 use crate::enemies::Enemy;
-use crate::inventory::spawn_gold_pickup;
+use crate::inventory::{spawn_gold_pickup, spawn_potion_pickup};
+use crate::player::Player;
+use crate::{HALF_H, HALF_W, TILE};
+use bevy::prelude::*;
+use rand::Rng;
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -17,12 +18,16 @@ const ENEMY_CONTACT_DAMAGE: i32 = 10;
 #[derive(Component, Debug)]
 pub struct Health {
     pub current: i32,
-    pub max:     i32,
+    pub max: i32,
 }
 
 impl Health {
-    pub fn new(max: i32) -> Self { Health { current: max, max } }
-    pub fn is_dead(&self) -> bool { self.current <= 0 }
+    pub fn new(max: i32) -> Self {
+        Health { current: max, max }
+    }
+    pub fn is_dead(&self) -> bool {
+        self.current <= 0
+    }
 }
 
 /// Marker added to an entity the frame it reaches 0 HP.
@@ -71,7 +76,10 @@ pub struct ContactDamageTimer(pub Timer);
 
 impl Default for ContactDamageTimer {
     fn default() -> Self {
-        ContactDamageTimer(Timer::from_seconds(CONTACT_DAMAGE_INTERVAL, TimerMode::Repeating))
+        ContactDamageTimer(Timer::from_seconds(
+            CONTACT_DAMAGE_INTERVAL,
+            TimerMode::Repeating,
+        ))
     }
 }
 
@@ -80,7 +88,7 @@ impl Default for ContactDamageTimer {
 #[derive(Event)]
 pub struct SplatEvent {
     pub position: Vec2,
-    pub amount:   i32,
+    pub amount: i32,
 }
 
 // ─── systems ──────────────────────────────────────────────────────────────────
@@ -88,19 +96,24 @@ pub struct SplatEvent {
 /// Reads all `DamageEvent`s and applies them to `Health` components.
 /// Marks entities with 0 HP as `Dead` and fires a `SplatEvent` for visual feedback.
 pub fn apply_damage(
-    mut events:    EventReader<DamageEvent>,
-    mut q_health:  Query<(&mut Health, &GlobalTransform)>,
-    mut splats:    EventWriter<SplatEvent>,
-    mut commands:  Commands,
+    mut events: EventReader<DamageEvent>,
+    mut q_health: Query<(&mut Health, &GlobalTransform)>,
+    mut splats: EventWriter<SplatEvent>,
+    mut commands: Commands,
 ) {
     for ev in events.iter() {
         if let Ok((mut health, gtransform)) = q_health.get_mut(ev.target) {
-            if health.is_dead() { continue; }
+            if health.is_dead() {
+                continue;
+            }
             health.current = (health.current - ev.amount).max(0);
 
             // Fire a splat at the target's world position.
             let pos = gtransform.translation().truncate();
-            splats.send(SplatEvent { position: pos, amount: ev.amount });
+            splats.send(SplatEvent {
+                position: pos,
+                amount: ev.amount,
+            });
 
             if health.is_dead() {
                 commands.entity(ev.target).insert(Dead);
@@ -116,8 +129,8 @@ pub fn apply_damage(
 /// pickup at the enemy's position before it's removed.
 /// Player death is handled separately (game-over screen).
 pub fn despawn_dead_enemies(
-    dead_query:   Query<(Entity, &Transform, &Enemy), (With<Dead>, With<Enemy>)>,
-    bar_query:    Query<(Entity, &crate::hud::EnemyBarFor)>,
+    dead_query: Query<(Entity, &Transform, &Enemy), (With<Dead>, With<Enemy>)>,
+    bar_query: Query<(Entity, &crate::hud::EnemyBarFor)>,
     asset_server: Res<AssetServer>,
     mut commands: Commands,
 ) {
@@ -129,6 +142,14 @@ pub fn despawn_dead_enemies(
             enemy.kind.gold_drop(),
         );
 
+        if rand::thread_rng().gen_range(0.0..1.0) < 0.20 {
+            spawn_potion_pickup(
+                &mut commands,
+                &asset_server,
+                transform.translation.truncate(),
+            );
+        }
+
         commands.entity(dead_entity).despawn();
         for (bar_entity, bar_for) in &bar_query {
             if bar_for.0 == dead_entity {
@@ -139,17 +160,24 @@ pub fn despawn_dead_enemies(
 }
 
 /// Updates the player's `Facing` component from the last movement direction.
-pub fn update_facing(
-    keyboard: Res<Input<KeyCode>>,
-    mut q:    Query<&mut Facing, With<Player>>,
-) {
+pub fn update_facing(keyboard: Res<Input<KeyCode>>, mut q: Query<&mut Facing, With<Player>>) {
     let mut dir = Vec2::ZERO;
-    if keyboard.pressed(KeyCode::W) || keyboard.pressed(KeyCode::Up)    { dir.y += 1.0; }
-    if keyboard.pressed(KeyCode::S) || keyboard.pressed(KeyCode::Down)  { dir.y -= 1.0; }
-    if keyboard.pressed(KeyCode::A) || keyboard.pressed(KeyCode::Left)  { dir.x -= 1.0; }
-    if keyboard.pressed(KeyCode::D) || keyboard.pressed(KeyCode::Right) { dir.x += 1.0; }
+    if keyboard.pressed(KeyCode::W) || keyboard.pressed(KeyCode::Up) {
+        dir.y += 1.0;
+    }
+    if keyboard.pressed(KeyCode::S) || keyboard.pressed(KeyCode::Down) {
+        dir.y -= 1.0;
+    }
+    if keyboard.pressed(KeyCode::A) || keyboard.pressed(KeyCode::Left) {
+        dir.x -= 1.0;
+    }
+    if keyboard.pressed(KeyCode::D) || keyboard.pressed(KeyCode::Right) {
+        dir.x += 1.0;
+    }
 
-    if dir == Vec2::ZERO { return; }
+    if dir == Vec2::ZERO {
+        return;
+    }
     let dir = dir.normalize();
     for mut facing in &mut q {
         facing.0 = dir;
@@ -159,17 +187,23 @@ pub fn update_facing(
 /// Player presses F — hits the tile directly ahead in the facing direction.
 /// Any enemy whose centre falls within that tile receives melee damage.
 pub fn player_melee_attack(
-    keyboard:   Res<Input<KeyCode>>,
-    p_query:    Query<(&Transform, &Facing, &crate::character_select::PlayerClass), With<Player>>,
-    e_query:    Query<(Entity, &Transform), (With<Enemy>, Without<Dead>)>,
+    keyboard: Res<Input<KeyCode>>,
+    p_query: Query<(&Transform, &Facing, &crate::character_select::PlayerClass), With<Player>>,
+    e_query: Query<(Entity, &Transform), (With<Enemy>, Without<Dead>)>,
     mut events: EventWriter<DamageEvent>,
 ) {
-    if !keyboard.just_pressed(KeyCode::F) { return; }
+    if !keyboard.just_pressed(KeyCode::F) {
+        return;
+    }
 
-    let Ok((p_transform, facing, class)) = p_query.get_single() else { return };
-    if facing.0 == Vec2::ZERO { return; }
+    let Ok((p_transform, facing, class)) = p_query.get_single() else {
+        return;
+    };
+    if facing.0 == Vec2::ZERO {
+        return;
+    }
 
-    let player_pos    = p_transform.translation.truncate();
+    let player_pos = p_transform.translation.truncate();
     let target_centre = player_pos + facing.0 * TILE;
 
     for (entity, e_transform) in &e_query {
@@ -188,15 +222,19 @@ pub fn player_melee_attack(
 /// Fires at most once per `CONTACT_DAMAGE_INTERVAL` seconds to avoid
 /// instant kills on contact.
 pub fn enemy_contact_damage(
-    time:       Res<Time>,
-    e_query:    Query<&Transform, (With<Enemy>, Without<Dead>)>,
+    time: Res<Time>,
+    e_query: Query<&Transform, (With<Enemy>, Without<Dead>)>,
     mut p_query: Query<(Entity, &Transform, &mut ContactDamageTimer), With<Player>>,
     mut events: EventWriter<DamageEvent>,
 ) {
-    let Ok((player_entity, p_transform, mut timer)) = p_query.get_single_mut() else { return };
+    let Ok((player_entity, p_transform, mut timer)) = p_query.get_single_mut() else {
+        return;
+    };
 
     timer.0.tick(time.delta());
-    if !timer.0.just_finished() { return; }
+    if !timer.0.just_finished() {
+        return;
+    }
 
     let pp = p_transform.translation.truncate();
 
